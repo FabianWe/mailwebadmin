@@ -1,0 +1,131 @@
+{{ define "layout" }}
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- The MIT License (MIT)
+
+Copyright (c) 2017 Fabian Wenzelmann
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. -->
+
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, shrink-to-fit=no, initial-scale=1">
+
+    <title>Mail Web Administration</title>
+
+    <!-- Bootstrap Core CSS -->
+    <link href="/static/bootstrap_simple_sidebar/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link href="/static/bootstrap_simple_sidebar/css/simple-sidebar.css" rel="stylesheet">
+
+    <link href="/static/default/default_bs.css" rel="stylesheet">
+    {{ template "css" }}
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+</head>
+<body>
+    <div id="wrapper">
+    {{ template "sidebar" }}
+    <div id="page-content-wrapper">
+        <div class="container-fluid">
+    {{ template "content" . }}
+    </div>
+        </div>
+    <!-- jQuery -->
+    <script src="/static/bootstrap_simple_sidebar/js/jquery.js"></script>
+
+    <!-- Bootstrap Core JavaScript -->
+    <script src="/static/bootstrap_simple_sidebar/js/bootstrap.min.js"></script>
+
+    <!-- Menu Toggle Script -->
+    <script>
+    $("#menu-toggle").click(function(e) {
+        e.preventDefault();
+        $("#wrapper").toggleClass("toggled");
+    });
+    </script>
+    {{ template "scripts" }}
+  </div>
+</body>
+
+</html>
+{{ end }}
+<!-- end define layout -->
+
+{{ define "css" }}
+
+{{ end }}
+
+{{ define "sidebar" }}
+<!-- Sidebar -->
+<div id="sidebar-wrapper">
+    <ul class="sidebar-nav">
+        <li class="sidebar-brand">
+            <a href="#">Mail Admin System</a>
+        </li>
+        <li>
+            <a href="#">Virtual Domains</a>
+        </li>
+        <li>
+            <a href="#">Mailing Accounts</a>
+        </li>
+        <li>
+            <a href="#">Aliases</a>
+        </li>
+        <li>
+            <a href="#">License</a>
+        </li>
+        </li>
+    </ul>
+</div>
+<!-- /#sidebar-wrapper -->
+{{ end }}
+<!-- end define sidebar -->
+
+
+{{ define "content" }}
+<!-- Page Content -->
+      hallo
+        <a href="#menu-toggle" class="btn btn-default" id="menu-toggle">Toggle Menu</a>
+        <!-- <div class="row">
+            <div class="col-lg-12">
+                <h1>Simple Sidebar</h1>
+                <p>This template has a responsive menu toggling system. The menu will appear collapsed on smaller screens, and will appear non-collapsed on larger screens. When toggled using the button below, the menu will appear/disappear. On small screens, the page content will be pushed off canvas.</p>
+                <p>Make sure to keep all page content within the <code>#page-content-wrapper</code>.</p>
+                <a href="#menu-toggle" class="btn btn-default" id="menu-toggle">Toggle Menu</a>
+            </div>
+        </div> -->
+<!-- /#page-content-wrapper -->
+{{end}}
+
+<!-- end define content -->
+
+{{ define "scripts" }}
+
+{{ end }}
