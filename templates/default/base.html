@@ -1,7 +1,3 @@
-{{ define "layout" }}
-<!DOCTYPE html>
-<html lang="en">
-
 <!-- The MIT License (MIT)
 
 Copyright (c) 2017 Fabian Wenzelmann
@@ -23,6 +19,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
+
+{{ define "layout" }}
+<!DOCTYPE html>
+<html lang="en">
 
 <head>
 
@@ -53,23 +53,26 @@ SOFTWARE. -->
     <div id="wrapper">
     {{ template "sidebar" }}
     <div id="page-content-wrapper">
-        <div class="container-fluid">
+      <button type="button" class="hamburger is-closed" data-toggle="offcanvas">
+        <span class="hamb-top"></span>
+    		<span class="hamb-middle"></span>
+				<span class="hamb-bottom"></span>
+      </button>
+      <div class="container">
+        <div class="row">
+          <div class="col-lg-8 col-lg-offset-2">
     {{ template "content" . }}
-    </div>
+          </div>
         </div>
+      </div>
+    </div>
     <!-- jQuery -->
     <script src="/static/bootstrap_simple_sidebar/js/jquery.js"></script>
 
     <!-- Bootstrap Core JavaScript -->
     <script src="/static/bootstrap_simple_sidebar/js/bootstrap.min.js"></script>
 
-    <!-- Menu Toggle Script -->
-    <script>
-    $("#menu-toggle").click(function(e) {
-        e.preventDefault();
-        $("#wrapper").toggleClass("toggled");
-    });
-    </script>
+    <script src="/static/default/default_theme.js"></script>
     {{ template "scripts" }}
   </div>
 </body>
@@ -84,7 +87,30 @@ SOFTWARE. -->
 
 {{ define "sidebar" }}
 <!-- Sidebar -->
-<div id="sidebar-wrapper">
+<div class="overlay"></div>
+<!-- Sidebar -->
+<nav class="navbar navbar-inverse navbar-fixed-top" id="sidebar-wrapper" role="navigation">
+  <ul class="nav sidebar-nav">
+  <li class="sidebar-brand">
+    <a href="#">
+      Mail Admin
+    </a>
+  </li>
+  <li>
+    <a href="#">Virtual Domains</a>
+  </li>
+  <li>
+    <a href="#">Mailing Accounts</a>
+  </li>
+  <li>
+    <a href="#">Aliases</a>
+  </li>
+  <li>
+    <a href="#">License</a>
+  </li>
+  </ul>
+</nav>
+<!-- <div id="sidebar-wrapper">
     <ul class="sidebar-nav">
         <li class="sidebar-brand">
             <a href="#">Mail Admin System</a>
@@ -103,7 +129,7 @@ SOFTWARE. -->
         </li>
         </li>
     </ul>
-</div>
+</div> -->
 <!-- /#sidebar-wrapper -->
 {{ end }}
 <!-- end define sidebar -->
@@ -111,17 +137,7 @@ SOFTWARE. -->
 
 {{ define "content" }}
 <!-- Page Content -->
-      hallo
-        <a href="#menu-toggle" class="btn btn-default" id="menu-toggle">Toggle Menu</a>
-        <!-- <div class="row">
-            <div class="col-lg-12">
-                <h1>Simple Sidebar</h1>
-                <p>This template has a responsive menu toggling system. The menu will appear collapsed on smaller screens, and will appear non-collapsed on larger screens. When toggled using the button below, the menu will appear/disappear. On small screens, the page content will be pushed off canvas.</p>
-                <p>Make sure to keep all page content within the <code>#page-content-wrapper</code>.</p>
-                <a href="#menu-toggle" class="btn btn-default" id="menu-toggle">Toggle Menu</a>
-            </div>
-        </div> -->
-<!-- /#page-content-wrapper -->
+Hallo foo
 {{end}}
 
 <!-- end define content -->
