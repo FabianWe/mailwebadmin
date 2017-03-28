@@ -27,8 +27,10 @@ function post_login() {
   // first post the data
   var destination = location.href + ":" + location.port;
   var form_data = $('#login-credentials').serializeArray();
-  var json_data = JSON.stringify({ 'username': form_data[1]['value'],
-    'password': form_data[2]['value'] });
+  form_map = { 'username': form_data[1]['value'],
+    'password': form_data[2]['value'] }
+  form_map['remember-me'] = (form_data.length == 4)
+  var json_data = JSON.stringify(form_map);
   var jqxhr = $.ajax({
     type: "POST",
     url: destination,

@@ -213,6 +213,20 @@ func LoginRequired(f AppHandleFunc) AppHandleFunc {
 				return err
 			}
 		}
+		// check the remember-me field from the session
+		rememberContainer, hasRemember := session.Values["remember-me"]
+		if !hasRemember {
+			appcontext.Logger.Info("Found session without remember-me set")
+		} else {
+			rememberMe, ok := rememberContainer.(bool)
+			if !ok {
+				appcontext.Logger.Info("Got remember-me that is not a bool")
+			} else {
+				if !rememberMe {
+					session.Options.MaxAge = 0
+				}
+			}
+		}
 		if saveErr := session.Save(r, w); saveErr != nil {
 			appcontext.Logger.Error("Saving session failed", saveErr)
 		}
@@ -243,6 +257,7 @@ func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reque
 	}
 	var loginData struct {
 		Username, Password string
+		RememberMe         bool `json:"remember-me"`
 	}
 	jsonErr := json.Unmarshal(body, &loginData)
 	if jsonErr != nil {
@@ -253,6 +268,7 @@ func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reque
 	// Validate the user
 	userId, checkErr := appcontext.UserHandler.Validate(loginData.Username, []byte(loginData.Password))
 	if checkErr == goauth.ErrUserNotFound {
+		appcontext.Logger.WithField("username", loginData.Username).Info("Login attempt with unkown username")
 		http.Error(w, "Login failed", 400)
 		return nil
 	}
@@ -274,7 +290,12 @@ func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reque
 		// something went wrong, report it!
 		return sessionErr
 	}
-	// save the session
+	// save the session, set the max age to -1 if remember me is set to false
+	// also set a session value to set the MaxAge to -1 all the time
+	session.Values["remember-me"] = loginData.RememberMe
+	if !loginData.RememberMe {
+		session.Options.MaxAge = 0
+	}
 	saveErr := session.Save(r, w)
 	if saveErr != nil {
 		appcontext.Logger.Error("Saving session failed", saveErr)

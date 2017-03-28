@@ -27,12 +27,10 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/FabianWe/goauth"
 	"github.com/FabianWe/mailwebadmin"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/context"
 	"github.com/gorilla/csrf"
-	"github.com/gorilla/sessions"
 )
 
 func main() {
@@ -59,27 +57,4 @@ func main() {
 	// appContext.Logger.Fatal(http.ListenAndServe(":8080", context.ClearHandler(http.DefaultServeMux)))
 	appContext.Logger.Fatal(http.ListenAndServe(":8080",
 		csrf.Protect(appContext.Keys[len(appContext.Keys)-1], csrf.Secure(false))(context.ClearHandler(http.DefaultServeMux))))
-}
-
-var store = sessions.NewCookieStore([]byte("bla"))
-var controller *goauth.SessionController
-
-func init() {
-	store.Options.MaxAge = 120
-}
-
-func CookieTest(w http.ResponseWriter, r *http.Request) {
-	session, _ := store.Get(r, "session")
-	if val, ok := session.Values["bla"]; ok {
-		log.Println("Got", val)
-	}
-	// session.Options.MaxAge = 60
-	// session.Options.MaxAge = -1
-	session.Values[len(session.Values)] = nil
-	session.Save(r, w)
-	log.Println(len(session.Values))
-}
-
-func loginTest(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("BLA"))
 }
