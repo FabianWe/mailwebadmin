@@ -65,13 +65,13 @@ function delete_confirm(title, message, callback) {
   });
 }
 
-function delete_domain(domainID, csrf) {
+function delete_domain(domainID) {
   var destination = location.protocol + "//" + location.host + "/listdomains/" + domainID + "/";
   var jqxhr = $.ajax({
     type: "DELETE",
     url: destination,
     headers: {
-        "X-CSRF-Token": csrf,
+        "X-CSRF-Token": csrf_listdomains,
     },
     success: function(data, status) {
       alert("DEL");
@@ -82,7 +82,7 @@ function delete_domain(domainID, csrf) {
   });
 }
 
-function remove_domain_button(domain_name, domainID, csrf) {
+function remove_domain_button(domain_name, domainID) {
   return $('<button type="button" class="btn btn-default"></button>')
           .append( $('<span class="glyphicon glyphicon-remove" style="color:red"></span>') )
           .click(function() {
@@ -92,7 +92,7 @@ function remove_domain_button(domain_name, domainID, csrf) {
               '</b>? This will delete all users and aliases for this domain as well!',
               function(result) {
                 if(result) {
-                  delete_domain(domainID, csrf)
+                  delete_domain(domainID)
                 }
               }
             )
@@ -102,37 +102,68 @@ function remove_domain_button(domain_name, domainID, csrf) {
 function fill_domains() {
   var spinner = new Spinner().spin();
   document.getElementById('virtual-domains').appendChild(spinner.el);
-  $('#return-status').addClass('hidden');
-  data_table.clear().draw();
+  $('#get-alert-status').addClass('hidden');
+  data_table.clear();
   var destination = location.protocol + "//" + location.host + "/listdomains";
   var jqxhr = $.ajax({
     type: "GET",
     url: destination,
     data: "",
     success: function(data, status, request) {
+      csrf_listdomains = request.getResponseHeader("X-CSRF-Token");
       if(data) {
         try {
           var jsonDecoded = JSON.parse(data);
           for(var domainID in jsonDecoded) {
             if(jsonDecoded.hasOwnProperty(domainID)) {
               var domain_name = jsonDecoded[domainID];
-              var button = remove_domain_button(domain_name, domainID, request.getResponseHeader("X-CSRF-Token"))
+              var button = remove_domain_button(domain_name, domainID)
               var button_td = $('<td></td>').append(button);
               var jqueryRow = $('<tr></tr>').append( $('<td></td>').text(domain_name), button_td );
               data_table.row.add(jqueryRow);
             }
           }
-          data_table.draw();
         }
         catch(e) {
-          $('#return-status').removeClass('hidden').html('Error getting domain list: Invalid return syntax');
+          $('#get-alert-status').removeClass('hidden alert-success').addClass("alert-danger").html('Error getting domain list: Invalid return syntax');
         }
       }
     }
   }).fail(function(jqXHR, textStatus, error) {
-    $('#return-status').removeClass('hidden').html('Error getting domain list: ' + error);
+    $('#get-alert-status').removeClass('hidden alert-success').addClass("alert-danger").html('Error getting domain list: ' + error);
+  })
+  .always(function() {
+    data_table.draw();
+    spinner.stop();
+  })
+}
+
+function add_domain() {
+  var spinner = new Spinner().spin();
+  document.getElementById('virtual-domains').appendChild(spinner.el);
+  $('#manipulate-alert-status').addClass('hidden');
+  var destination = location.protocol + "//" + location.host + "/listdomains/";
+  var form_data = $('#add-domain-form').serializeArray();
+  form_map = { 'domain-name': form_data[0]['value'] }
+  var json_data = JSON.stringify(form_map);
+  var jqxhr = $.ajax({
+    type: 'POST',
+    url: destination,
+    data: json_data,
+    headers: {
+      "X-CSRF-Token": csrf_listdomains,
+    },
+    success: function(data, status) {
+      $('#manipulate-alert-status').removeClass('hidden alert-danger').addClass("alert-success").html('Added new virtual domain');
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+    $('#manipulate-alert-status').removeClass('hidden alert-success').addClass("alert-danger").html('Error adding domain: ' + error);
+  })
+  .always(function() {
+    spinner.stop();
+    fill_domains();
   });
-  spinner.stop();
 }
 
 /* The following code was taken from

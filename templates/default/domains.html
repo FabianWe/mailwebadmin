@@ -30,7 +30,12 @@ SOFTWARE. -->
 <script src="/static/default/bootbox.min.js"></script>
 <script>
 var data_table = null
+var csrf_listdomains = null
 $(document).ready(function() {
+  $("#add-domain-form").submit(function(event) {
+    event.preventDefault();
+    add_domain();
+  });
     data_table = $('#virtual-domains').DataTable( {
       "columnDefs": [
         { "searchable": false, "orderable": false, "targets": 1 }
@@ -43,7 +48,22 @@ $(document).ready(function() {
 
 {{ define "content" }}
 <h1>Virtual Domains</h1>
-<div class="alert alert-danger hidden" role="alert" id="return-status">Bla</div>
+
+<div class="alert alert-danger hidden" id="get-alert-status"></div>
+<div class="alert alert-success hidden" id="manipulate-alert-status"></div>
+
+<h2>Add New Virtual Domain</h2>
+<div class="inline-block" id="virtual-domains-area">
+    <form id="add-domain-form">
+        <div class="form-group">
+            <label for="Name">Domain</label>
+            <input type="text" class="form-control" id="domain-name" name="domain-name" placeholder="Name">
+        </div>
+        <button type="submit" class="btn btn-primary" id="submit-button">Add Domain</button>
+    </form>
+</div>
+
+<h2>Virtual Domain List</h2>
 <table id="virtual-domains" class="table table-striped table-bordered" cellspacing="0" width="100%">
   <thead>
     <tr>

@@ -30,6 +30,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
+	"strconv"
 
 	"github.com/FabianWe/goauth"
 	"github.com/gorilla/csrf"
@@ -228,6 +229,45 @@ func ParseListDomainURL(url string) (string, error) {
 	}
 }
 
+func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	body, readErr := ioutil.ReadAll(r.Body)
+	if readErr != nil {
+		appcontext.Logger.Info("Invalid request syntax for add domain.")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	var domainData struct {
+		DomainName string `json:"domain-name"`
+	}
+	jsonErr := json.Unmarshal(body, &domainData)
+	if jsonErr != nil {
+		appcontext.Logger.Info("Invalid request syntax for add domain.")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	// try to add the domain, we write the result new id back to the writer
+	domainID, err := AddVirtualDomain(appcontext, domainData.DomainName)
+	if err != nil {
+		return err
+	}
+	res := make(map[string]interface{})
+	res["domain-id"] = domainID
+	// encode to json
+	jsonEnc, jsonEncErr := json.Marshal(res)
+	if jsonEncErr != nil {
+		// just log the error, but the insertion took place, so we return nil
+		appcontext.Logger.WithField("map", res).WithError(jsonEncErr).Warn("Can't enocode map to JSON")
+		return nil
+	}
+	// everything ok
+	w.Write(jsonEnc)
+	return nil
+}
+
+func deleteDomain(domainID int64, appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
 func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	part, parseErr := ParseListDomainURL(r.URL.String())
 	if parseErr != nil {
@@ -253,9 +293,23 @@ func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 		}
 		w.Write(jsonEnc)
 		return nil
+	case postMethod:
+		if part != "" {
+			http.Error(w, "Invalid request to /listdomains/.", 400)
+			return nil
+		}
+		return addDomain(appcontext, w, r)
 	case deleteMethod:
-		fmt.Println("DELETE")
-		return nil
+		if part == "" {
+			http.Error(w, "Invalid request to /listdomains/: No id given.", 400)
+			return nil
+		}
+		domainID, parseErr := strconv.ParseInt(part, 10, 64)
+		if parseErr != nil {
+			http.Error(w, "Invalid request to /listdomains/: Id is not an integer.", 400)
+			return nil
+		}
+		return deleteDomain(domainID, appcontext, w, r)
 	default:
 		http.Error(w, fmt.Sprintf("Invalid method for \"/\": %s", r.Method), 400)
 		return nil
