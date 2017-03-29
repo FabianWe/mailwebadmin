@@ -24,6 +24,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
 	"path/filepath"
 
@@ -56,9 +57,9 @@ func main() {
 	appContext.Templates["root"] = mailwebadmin.RootBootstrapTemplate()
 	appContext.Templates["domains"] = mailwebadmin.BootstrapDomainsTemplate()
 	http.Handle("/login/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginPageHandler))
-	http.Handle("/welcome", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RootPageHandler)))
+	http.Handle("/welcome/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RootPageHandler)))
 	http.Handle("/listdomains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListDomainsJSON)))
 	http.Handle("/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderDomainsTemplate)))
-	appContext.Logger.Fatal(http.ListenAndServe(":8080",
+	appContext.Logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", appContext.Port),
 		csrf.Protect(appContext.Keys[len(appContext.Keys)-1], csrf.Secure(false))(context.ClearHandler(http.DefaultServeMux))))
 }

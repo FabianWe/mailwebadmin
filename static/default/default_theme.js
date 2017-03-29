@@ -25,21 +25,21 @@ SOFTWARE.
 
 function post_login() {
   // first post the data
-  var destination = location.protocol + "//" + location.host + "/login";
+  var destination = location.protocol + "//" + location.host + "/login/";
   var form_data = $('#login-credentials').serializeArray();
   form_map = { 'username': form_data[1]['value'],
     'password': form_data[2]['value'] }
   form_map['remember-me'] = (form_data.length == 4)
   var json_data = JSON.stringify(form_map);
   var jqxhr = $.ajax({
-    type: "POST",
+    type: 'POST',
     url: destination,
     data: json_data,
     headers: {
       "X-CSRF-Token": form_data[0]['value'],
     },
     success: function(data, status) {
-      window.location.replace(location.protocol + "//" + location.host + "/welcome");
+      window.location.replace(location.protocol + "//" + location.host + "/welcome/");
     }
   })
   .fail(function(jqXHR, textStatus, error) {
@@ -65,7 +65,24 @@ function delete_confirm(title, message, callback) {
   });
 }
 
-function remove_domain_button(domain_name, domainID) {
+function delete_domain(domainID, csrf) {
+  var destination = location.protocol + "//" + location.host + "/listdomains/" + domainID + "/";
+  var jqxhr = $.ajax({
+    type: "DELETE",
+    url: destination,
+    headers: {
+        "X-CSRF-Token": csrf,
+    },
+    success: function(data, status) {
+      alert("DEL");
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+    alert("Fail: " + textStatus + " " + error);
+  });
+}
+
+function remove_domain_button(domain_name, domainID, csrf) {
   return $('<button type="button" class="btn btn-default"></button>')
           .append( $('<span class="glyphicon glyphicon-remove" style="color:red"></span>') )
           .click(function() {
@@ -75,9 +92,7 @@ function remove_domain_button(domain_name, domainID) {
               '</b>? This will delete all users and aliases for this domain as well!',
               function(result) {
                 if(result) {
-                  alert('JO');
-                } else {
-                  alert('NÖ');
+                  delete_domain(domainID, csrf)
                 }
               }
             )
@@ -94,14 +109,14 @@ function fill_domains() {
     type: "GET",
     url: destination,
     data: "",
-    success: function(data, status) {
+    success: function(data, status, request) {
       if(data) {
         try {
           var jsonDecoded = JSON.parse(data);
           for(var domainID in jsonDecoded) {
             if(jsonDecoded.hasOwnProperty(domainID)) {
               var domain_name = jsonDecoded[domainID];
-              var button = remove_domain_button(domain_name, domainID)
+              var button = remove_domain_button(domain_name, domainID, request.getResponseHeader("X-CSRF-Token"))
               var button_td = $('<td></td>').append(button);
               var jqueryRow = $('<tr></tr>').append( $('<td></td>').text(domain_name), button_td );
               data_table.row.add(jqueryRow);

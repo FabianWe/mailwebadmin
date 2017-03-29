@@ -40,6 +40,12 @@ var mailRegexp = regexp.MustCompile(`^([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-
 
 var ErrInvalidEmail = errors.New("Invalid Email address")
 
+const (
+	getMethod    = "GET"
+	postMethod   = "POST"
+	deleteMethod = "DELETE"
+)
+
 func IsValidMail(email string) error {
 	res := mailRegexp.FindStringSubmatch(email)
 	if res == nil {
@@ -181,7 +187,7 @@ func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reque
 	if saveErr != nil {
 		appcontext.Logger.Error("Saving session failed", saveErr)
 	}
-	http.Redirect(w, r, "/", 302)
+	http.Redirect(w, r, "/welcome", 302)
 	return nil
 }
 
@@ -190,9 +196,9 @@ func LoginPageHandler(appcontext *MailAppContext, w http.ResponseWriter, r *http
 	default:
 		http.Error(w, fmt.Sprintf("Invalid method for \"/login\": %s", r.Method), 400)
 		return nil
-	case "GET":
+	case getMethod:
 		return RenderLoginTemplate(appcontext, w, r)
-	case "POST":
+	case postMethod:
 		return CheckLogin(appcontext, w, r)
 	}
 }
@@ -206,12 +212,12 @@ func RootPageHandler(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 	default:
 		http.Error(w, fmt.Sprintf("Invalid method for \"/\": %s", r.Method), 400)
 		return nil
-	case "GET":
+	case getMethod:
 		return RenderRootTemplate(appcontext, w, r)
 	}
 }
 
-var listDomainsRegex = regexp.MustCompile(`^/listdomains/(\d*/)?$`)
+var listDomainsRegex = regexp.MustCompile(`^/listdomains/(\d+/?)?$`)
 
 func ParseListDomainURL(url string) (string, error) {
 	res := listDomainsRegex.FindStringSubmatch(url)
@@ -228,16 +234,30 @@ func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 		http.NotFound(w, r)
 		return nil
 	}
-	fmt.Println(part)
-	res, err := ListVirtualDomains(appcontext)
-	if err != nil {
-		return err
+	switch r.Method {
+	case getMethod:
+		if part != "" {
+			http.Error(w, "Invalid request. Must be GET /listdomains/", 400)
+			return nil
+		}
+		res, err := ListVirtualDomains(appcontext)
+		if err != nil {
+			return err
+		}
+		// set csrf header
+		w.Header().Set("X-CSRF-Token", csrf.Token(r))
+		// create json encoding
+		jsonEnc, jsonErr := json.Marshal(res)
+		if jsonErr != nil {
+			return jsonErr
+		}
+		w.Write(jsonEnc)
+		return nil
+	case deleteMethod:
+		fmt.Println("DELETE")
+		return nil
+	default:
+		http.Error(w, fmt.Sprintf("Invalid method for \"/\": %s", r.Method), 400)
+		return nil
 	}
-	// create json encoding
-	jsonEnc, jsonErr := json.Marshal(res)
-	if jsonErr != nil {
-		return jsonErr
-	}
-	w.Write(jsonEnc)
-	return nil
 }

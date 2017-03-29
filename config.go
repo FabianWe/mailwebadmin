@@ -50,6 +50,7 @@ type MailAppContext struct {
 	Keys                   [][]byte
 	Templates              map[string]*template.Template
 	DefaultSessionLifespan time.Duration
+	Port                   int
 }
 
 func (context *MailAppContext) ReadOrCreateKeys() {
@@ -143,6 +144,7 @@ func GenKeyPair() ([][]byte, error) {
 }
 
 type tomlConfig struct {
+	Port         int
 	DB           dbInfo       `toml:"mysql"`
 	TimeSettings timeSettings `toml:"timers"`
 }
@@ -172,6 +174,9 @@ func ParseConfig(configDir string) (*MailAppContext, error) {
 	var conf tomlConfig
 	if _, err := toml.DecodeFile(confPath, &conf); err != nil {
 		return nil, err
+	}
+	if conf.Port == 0 {
+		conf.Port = 80
 	}
 	if conf.DB.User == "" {
 		conf.DB.User = "root"
@@ -221,6 +226,7 @@ func ParseConfig(configDir string) (*MailAppContext, error) {
 		SessionController: sessionController, Templates: make(map[string]*template.Template)}
 
 	res.DefaultSessionLifespan = sessionLifespan
+	res.Port = conf.Port
 
 	res.ReadOrCreateKeys()
 
