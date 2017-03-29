@@ -22,6 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+/* The following code was taken from
+http://bootsnipp.com/snippets/featured/fancy-sidebar-navigation */
+
 body {
     position: relative;
     overflow-x: hidden;
@@ -318,3 +321,6 @@ html { height: 100%;}
     background-color: rgba(250,250,250,.8);
     z-index: 1;
 }
+
+/* end code from
+http://bootsnipp.com/snippets/featured/fancy-sidebar-navigation */

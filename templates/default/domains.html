@@ -20,50 +20,38 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 
-{{ define "sidebar" }}
-<p/>
-{{ end }}
-
 {{ define "css" }}
-<style>
-html,body{
- display: flex;
- flex-dorection: column;
- justify-content: center;
- align-items: center;
- height: 100%;
-}
-</style>
+<link href="/static/default/datatables.min.css" rel="stylesheet">
 {{ end }}
 
 {{ define "scripts" }}
+<script src="/static/default/datatables.min.js"></script>
+<script src="/static/default/spin.min.js"></script>
+<script src="/static/default/bootbox.min.js"></script>
 <script>
-$("#login-credentials").submit(function(event) {
-  event.preventDefault();
-  post_login();
+var data_table = null
+$(document).ready(function() {
+    data_table = $('#virtual-domains').DataTable( {
+      "columnDefs": [
+        { "searchable": false, "orderable": false, "targets": 1 }
+      ]
+    });
+    fill_domains();
 });
 </script>
 {{ end }}
 
 {{ define "content" }}
-<div class="inline-block" id="login-area">
-  <div class="alert alert-info" role="alert" id="login-status">Login required</div>
-    <form id="login-credentials">
-      {{ .csrfField }}
-        <div class="form-group">
-            <label for="username">Username</label>
-            <input type="text" class="form-control" id="username" name="username" placeholder="Username">
-        </div>
-        <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" class="form-control" id="password" name="password" placeholder="Password">
-        </div>
-        <div class="checkbox">
-            <label><input type="checkbox" id="remember-me" name="remember-me" value="yes" checked="checked"> Remember me</label>
-        </div>
-        <button type="submit" class="btn btn-primary" id="submit-button">Login</button>
-    </form>
-</div>
+<h1>Virtual Domains</h1>
+<div class="alert alert-danger hidden" role="alert" id="return-status">Bla</div>
+<table id="virtual-domains" class="table table-striped table-bordered" cellspacing="0" width="100%">
+  <thead>
+    <tr>
+      <td>Domain</td>
+      <td>Delete</td>
+    </tr>
+  </thead>
+  <tbody>
+  </tbody>
+</table>
 {{ end }}
-
-{{ template "layout" }}

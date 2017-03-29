@@ -23,9 +23,11 @@
 package main
 
 import (
-	"database/sql"
-	"log"
+	"flag"
 	"net/http"
+	"path/filepath"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/FabianWe/mailwebadmin"
 	_ "github.com/go-sql-driver/mysql"
@@ -34,27 +36,29 @@ import (
 )
 
 func main() {
-	db, openErr := sql.Open("mysql", "root:@/mailserver")
-	if openErr != nil {
-		log.Fatal(openErr)
+	// parse config dir flag
+
+	configDirPtr := flag.String("config", "./config", "Directory to store the configuration files.")
+	flag.Parse()
+	configDir, configDirParseErr := filepath.Abs(*configDirPtr)
+	if configDirParseErr != nil {
+		log.Fatal("Can't parse config dir path: ", configDir)
 	}
-	appContext := mailwebadmin.NewMailAppContext(db, "config", nil)
-	appContext.ReadOrCreateKeys()
+
+	appContext, configErr := mailwebadmin.ParseConfig(configDir)
+	if configErr != nil {
+		log.Fatal(configErr)
+	}
 	http.Handle("/static/", mailwebadmin.StaticHandler())
 	http.Handle("/favicon.ico", http.FileServer(http.Dir("static")))
 	// get the templates
 	appContext.Templates["login"] = mailwebadmin.BootstrapLoginTemplate()
 	appContext.Templates["root"] = mailwebadmin.RootBootstrapTemplate()
+	appContext.Templates["domains"] = mailwebadmin.BootstrapDomainsTemplate()
 	http.Handle("/login/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginPageHandler))
-	// http.HandleFunc("/login/", mailwebadmin.PostDistinguisher(execHandleFunc(loginTemplate, "layout", ""),
-	// 	http.HandlerFunc(mailwebadmin.LoginPost)))
-	http.Handle("/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RootPageHandler)))
-	f := func(appcontext *mailwebadmin.MailAppContext, w http.ResponseWriter, r *http.Request) error {
-		w.Write([]byte("JUHU"))
-		return nil
-	}
-	http.Handle("/muh/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(f)))
-	// appContext.Logger.Fatal(http.ListenAndServe(":8080", context.ClearHandler(http.DefaultServeMux)))
+	http.Handle("/welcome", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RootPageHandler)))
+	http.Handle("/listdomains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListDomainsJSON)))
+	http.Handle("/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderDomainsTemplate)))
 	appContext.Logger.Fatal(http.ListenAndServe(":8080",
 		csrf.Protect(appContext.Keys[len(appContext.Keys)-1], csrf.Secure(false))(context.ClearHandler(http.DefaultServeMux))))
 }

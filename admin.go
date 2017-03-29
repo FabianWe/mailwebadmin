@@ -23,34 +23,25 @@
 package mailwebadmin
 
 import (
-	"bufio"
-	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"path"
 	"regexp"
-	"time"
 
 	"github.com/FabianWe/goauth"
 	"github.com/gorilla/csrf"
-	"github.com/gorilla/securecookie"
-	"github.com/gorilla/sessions"
-	"github.com/sirupsen/logrus"
 )
 
 // Simplified, but should be ok
-var MailRegexp = regexp.MustCompile(`^([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)`)
+var mailRegexp = regexp.MustCompile(`^([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)`)
 
 var ErrInvalidEmail = errors.New("Invalid Email address")
 
 func IsValidMail(email string) error {
-	res := MailRegexp.FindStringSubmatch(email)
+	res := mailRegexp.FindStringSubmatch(email)
 	if res == nil {
 		return ErrInvalidEmail
 	} else {
@@ -60,124 +51,6 @@ func IsValidMail(email string) error {
 
 func StaticHandler() http.Handler {
 	return http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
-}
-
-type MailAppContext struct {
-	DB                *sql.DB
-	ConfigDir         string
-	Store             sessions.Store
-	Logger            *logrus.Logger
-	UserHandler       goauth.UserHandler
-	SessionController *goauth.SessionController
-	Keys              [][]byte
-	Templates         map[string]*template.Template
-}
-
-func NewMailAppContext(db *sql.DB, configDir string, store sessions.Store) *MailAppContext {
-	pwHandler := goauth.NewScryptHandler(nil)
-	userHandler := goauth.NewMySQLUserHandler(db, pwHandler)
-	sessionController := goauth.NewMySQLSessionController(db, "", "")
-	res := &MailAppContext{DB: db, ConfigDir: configDir,
-		Store: store, Logger: logrus.New(), UserHandler: userHandler,
-		SessionController: sessionController, Templates: make(map[string]*template.Template)}
-	if err := userHandler.Init(); err != nil {
-		res.Logger.Fatal("Unable to connecto to database:", err)
-	}
-	if err := sessionController.Init(); err != nil {
-		res.Logger.Fatal("Unable to connect to database:", err)
-	}
-	res.Logger.Level = logrus.InfoLevel
-	return res
-}
-
-func (context *MailAppContext) ReadOrCreateKeys() {
-	keyFile := path.Join(context.ConfigDir, "keys")
-	var res [][]byte
-	if _, err := os.Stat(keyFile); os.IsNotExist(err) {
-		context.Logger.Info("Key file doesn't exist, creating new keys.")
-		// path does not exist, so get a new random pair
-		pairs, genErr := GenKeyPair()
-		if genErr != nil {
-			context.Logger.Fatal("Can't create random key pair, there seems to be an error with your random engine. Stop now!", genErr)
-		}
-		// write the pairs
-		writeErr := WriteKeyPairs(keyFile, pairs...)
-		if writeErr != nil {
-			context.Logger.Fatal("Can't write new keys to file:", writeErr)
-		}
-		res = pairs
-	} else {
-		// try to read from file
-		pairs, readErr := ReadKeyPairs(keyFile)
-		if readErr != nil {
-			context.Logger.Fatal("Can't read key file:", readErr)
-		}
-		res = pairs
-	}
-	context.Keys = res
-	context.Store = sessions.NewCookieStore(res...)
-}
-
-func ReadKeyPairs(path string) ([][]byte, error) {
-	file, err := os.Open(path)
-	defer file.Close()
-	res := make([][]byte, 0)
-	if err != nil {
-		return nil, err
-	}
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		decode, decodeErr := base64.StdEncoding.DecodeString(line)
-		if decodeErr != nil {
-			return nil, decodeErr
-		}
-		res = append(res, decode)
-	}
-	if err = scanner.Err(); err != nil {
-		return nil, err
-	}
-	if len(res)%2 != 0 {
-		return nil, fmt.Errorf("Expected a list of keyPairs, i.e. length mod 2 == 0, got length %d", len(res))
-	}
-	return res, nil
-}
-
-func WriteKeyPairs(path string, keyPairs ...[]byte) error {
-	if len(keyPairs)%2 != 0 {
-		return fmt.Errorf("Expected a list of keyPairs, i.e. length mod 2 == 0, got length %d", len(keyPairs))
-	}
-	file, err := os.Create(path)
-	defer file.Close()
-	if err != nil {
-		return err
-	}
-	writer := bufio.NewWriter(file)
-	// write each line
-	for _, val := range keyPairs {
-		_, err = writer.WriteString(base64.StdEncoding.EncodeToString(val) + "\n")
-		if err != nil {
-			return err
-		}
-	}
-	err = writer.Flush()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func GenKeyPair() ([][]byte, error) {
-	err := errors.New("Can't create a random key, something wrong with your random engine? Stop now!")
-	authKey := securecookie.GenerateRandomKey(64)
-	if authKey == nil {
-		return nil, err
-	}
-	encryptionKey := securecookie.GenerateRandomKey(32)
-	if encryptionKey == nil {
-		return nil, err
-	}
-	return [][]byte{authKey, encryptionKey}, nil
 }
 
 type AppHandleFunc func(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error
@@ -242,10 +115,18 @@ func RootBootstrapTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html"))
 }
 
+func BootstrapDomainsTemplate() *template.Template {
+	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/domains.html"))
+}
+
 func RenderLoginTemplate(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	values := map[string]interface{}{
 		csrf.TemplateTag: csrf.TemplateField(r)}
 	return appcontext.Templates["login"].ExecuteTemplate(w, "layout", values)
+}
+
+func RenderDomainsTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	return appContext.Templates["domains"].ExecuteTemplate(w, "layout", nil)
 }
 
 func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
@@ -285,7 +166,7 @@ func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reque
 	}
 	// everything ok!
 	// create an auth session
-	_, _, session, sessionErr := appcontext.SessionController.CreateAuthSession(r, appcontext.Store, userId, time.Duration(5*time.Minute))
+	_, _, session, sessionErr := appcontext.SessionController.CreateAuthSession(r, appcontext.Store, userId, appcontext.DefaultSessionLifespan)
 	if sessionErr != nil {
 		// something went wrong, report it!
 		return sessionErr
@@ -328,4 +209,35 @@ func RootPageHandler(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 	case "GET":
 		return RenderRootTemplate(appcontext, w, r)
 	}
+}
+
+var listDomainsRegex = regexp.MustCompile(`^/listdomains/(\d*/)?$`)
+
+func ParseListDomainURL(url string) (string, error) {
+	res := listDomainsRegex.FindStringSubmatch(url)
+	if res == nil {
+		return "", errors.New("No match")
+	} else {
+		return res[1], nil
+	}
+}
+
+func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	part, parseErr := ParseListDomainURL(r.URL.String())
+	if parseErr != nil {
+		http.NotFound(w, r)
+		return nil
+	}
+	fmt.Println(part)
+	res, err := ListVirtualDomains(appcontext)
+	if err != nil {
+		return err
+	}
+	// create json encoding
+	jsonEnc, jsonErr := json.Marshal(res)
+	if jsonErr != nil {
+		return jsonErr
+	}
+	w.Write(jsonEnc)
+	return nil
 }
