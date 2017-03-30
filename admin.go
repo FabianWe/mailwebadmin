@@ -218,14 +218,14 @@ func RootPageHandler(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 	}
 }
 
-var listDomainsRegex = regexp.MustCompile(`^/listdomains/(\d+/?)?$`)
+var listDomainsRegex = regexp.MustCompile(`^/listdomains/((\d+)/?)?$`)
 
 func ParseListDomainURL(url string) (string, error) {
 	res := listDomainsRegex.FindStringSubmatch(url)
 	if res == nil {
 		return "", errors.New("No match")
 	} else {
-		return res[1], nil
+		return res[2], nil
 	}
 }
 
@@ -265,7 +265,8 @@ func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reques
 }
 
 func deleteDomain(domainID int64, appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
-	return nil
+	// try to remove the domain
+	return DeleteVirtualDomain(appcontext, domainID)
 }
 
 func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {

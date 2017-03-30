@@ -65,7 +65,18 @@ function delete_confirm(title, message, callback) {
   });
 }
 
+function set_alert(alert_obj, status, html) {
+  if(status == 'success') {
+    return alert_obj.removeClass('hidden alert-danger').addClass("alert-success").html(html);
+  } else {
+    return alert_obj.removeClass('hidden alert-success').addClass("alert-danger").html(html);
+  }
+}
+
+
 function delete_domain(domainID) {
+  var spinner = new Spinner().spin();
+  document.getElementById('virtual-domains').appendChild(spinner.el);
   var destination = location.protocol + "//" + location.host + "/listdomains/" + domainID + "/";
   var jqxhr = $.ajax({
     type: "DELETE",
@@ -74,11 +85,15 @@ function delete_domain(domainID) {
         "X-CSRF-Token": csrf_listdomains,
     },
     success: function(data, status) {
-      alert("DEL");
+      set_alert($('#manipulate-alert-status'), 'success', 'Successfully removed domain');
     }
   })
   .fail(function(jqXHR, textStatus, error) {
-    alert("Fail: " + textStatus + " " + error);
+    set_alert($('#manipulate-alert-status'), 'error', 'Error removing domain: ' + error);
+  })
+  .always(function() {
+    fill_domains();
+    spinner.stop();
   });
 }
 
@@ -125,23 +140,22 @@ function fill_domains() {
           }
         }
         catch(e) {
-          $('#get-alert-status').removeClass('hidden alert-success').addClass("alert-danger").html('Error getting domain list: Invalid return syntax');
+          set_alert($('#get-alert-status'), 'error', 'Error getting domain list: Invalid return syntax');
         }
       }
     }
   }).fail(function(jqXHR, textStatus, error) {
-    $('#get-alert-status').removeClass('hidden alert-success').addClass("alert-danger").html('Error getting domain list: ' + error);
+    set_alert($('#get-alert-status'), 'error', 'Error getting domain list: ' + error);
   })
   .always(function() {
     data_table.draw();
     spinner.stop();
-  })
+  });
 }
 
 function add_domain() {
   var spinner = new Spinner().spin();
   document.getElementById('virtual-domains').appendChild(spinner.el);
-  $('#manipulate-alert-status').addClass('hidden');
   var destination = location.protocol + "//" + location.host + "/listdomains/";
   var form_data = $('#add-domain-form').serializeArray();
   form_map = { 'domain-name': form_data[0]['value'] }
@@ -154,11 +168,11 @@ function add_domain() {
       "X-CSRF-Token": csrf_listdomains,
     },
     success: function(data, status) {
-      $('#manipulate-alert-status').removeClass('hidden alert-danger').addClass("alert-success").html('Added new virtual domain');
+      set_alert($('#manipulate-alert-status'), 'success', 'Added new virtual domain');
     }
   })
   .fail(function(jqXHR, textStatus, error) {
-    $('#manipulate-alert-status').removeClass('hidden alert-success').addClass("alert-danger").html('Error adding domain: ' + error);
+    set_alert($('#manipulate-alert-status'), 'error', 'Error adding domain: ' + error);
   })
   .always(function() {
     spinner.stop();
