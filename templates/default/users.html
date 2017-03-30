@@ -30,44 +30,46 @@ SOFTWARE. -->
 <script src="/static/default/bootbox.min.js"></script>
 <script>
 var data_table = null
-var csrf_listdomains = null
+var csrf_listusers = null
 $(document).ready(function() {
-  $("#add-domain-form").submit(function(event) {
+  $("#add-user-form").submit(function(event) {
     event.preventDefault();
-    add_domain();
+    // TODO
   });
-    data_table = $('#virtual-domains').DataTable( {
+    data_table = $('#virtual-users').DataTable( {
       "columnDefs": [
-        { "searchable": false, "orderable": false, "targets": 1 }
+        { "searchable": false, "orderable": false, "targets": 3 }
       ]
     });
-    fill_domains();
+    fill_users();
 });
 </script>
 {{ end }}
 
 {{ define "content" }}
-<h1>Virtual Domains</h1>
+<h1>Virtual Users</h1>
 
 <div class="alert alert-danger hidden" id="get-alert-status"></div>
 <div class="alert alert-success hidden" id="manipulate-alert-status"></div>
 
-<h2>Add New Virtual Domain</h2>
-<div class="inline-block" id="virtual-domains-area">
-    <form id="add-domain-form">
+<h2>Add New User</h2>
+<div class="inline-block" id="virtual-users-area">
+    <form id="add-user-form">
         <div class="form-group">
-            <label for="domain-name">Domain</label>
-            <input type="text" class="form-control" id="domain-name" name="domain-name" placeholder="Name">
+            <label for="user-mail">User</label>
+            <input type="text" class="form-control" id="user-email" name="user-email" placeholder="Email">
         </div>
-        <button type="submit" class="btn btn-primary" id="submit-button">Add Domain</button>
+        <button type="submit" class="btn btn-primary" id="submit-button">Add User</button>
     </form>
 </div>
 
-<h2>Virtual Domain List</h2>
-<table id="virtual-domains" class="table table-striped table-bordered" cellspacing="0" width="100%">
+<h2>Virtual Users List</h2>
+<table id="virtual-users" class="table table-striped table-bordered" cellspacing="0" width="100%">
   <thead>
     <tr>
+      <td>Email</td>
       <td>Domain</td>
+      <td>Alias for</td>
       <td>Delete</td>
     </tr>
   </thead>

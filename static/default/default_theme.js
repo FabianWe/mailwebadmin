@@ -39,7 +39,7 @@ function post_login() {
       "X-CSRF-Token": form_data[0]['value'],
     },
     success: function(data, status) {
-      window.location.replace(location.protocol + "//" + location.host + "/welcome/");
+      window.location.replace(location.protocol + "//" + location.host + "/");
     }
   })
   .fail(function(jqXHR, textStatus, error) {
@@ -71,6 +71,34 @@ function set_alert(alert_obj, status, html) {
   } else {
     return alert_obj.removeClass('hidden alert-success').addClass("alert-danger").html(html);
   }
+}
+
+
+function add_domain() {
+  var spinner = new Spinner().spin();
+  document.getElementById('virtual-domains').appendChild(spinner.el);
+  var destination = location.protocol + "//" + location.host + "/listdomains/";
+  var form_data = $('#add-domain-form').serializeArray();
+  form_map = { 'domain-name': form_data[0]['value'] }
+  var json_data = JSON.stringify(form_map);
+  var jqxhr = $.ajax({
+    type: 'POST',
+    url: destination,
+    data: json_data,
+    headers: {
+      "X-CSRF-Token": csrf_listdomains,
+    },
+    success: function(data, status) {
+      set_alert($('#manipulate-alert-status'), 'success', 'Added new virtual domain');
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+    set_alert($('#manipulate-alert-status'), 'error', 'Error adding domain: ' + error);
+  })
+  .always(function() {
+    spinner.stop();
+    fill_domains();
+  });
 }
 
 
@@ -119,7 +147,7 @@ function fill_domains() {
   document.getElementById('virtual-domains').appendChild(spinner.el);
   $('#get-alert-status').addClass('hidden');
   data_table.clear();
-  var destination = location.protocol + "//" + location.host + "/listdomains";
+  var destination = location.protocol + "//" + location.host + "/listdomains/";
   var jqxhr = $.ajax({
     type: "GET",
     url: destination,
@@ -134,7 +162,7 @@ function fill_domains() {
               var domain_name = jsonDecoded[domainID];
               var button = remove_domain_button(domain_name, domainID)
               var button_td = $('<td></td>').append(button);
-              var jqueryRow = $('<tr></tr>').append( $('<td></td>').text(domain_name), button_td );
+              var jqueryRow = $('<tr></tr>').append( $('<td></td>').html('<a href="/users?domain=' + domainID + '">' + escapeHtml(domain_name) + "</a>"), button_td );
               data_table.row.add(jqueryRow);
             }
           }
@@ -153,32 +181,78 @@ function fill_domains() {
   });
 }
 
-function add_domain() {
+function fill_users() {
+  var domainID = "-1";
+  var urlParam = getUrlParameter('domain')
+  if (typeof urlParam != 'undefined') {
+    domainID = urlParam
+  }
   var spinner = new Spinner().spin();
-  document.getElementById('virtual-domains').appendChild(spinner.el);
-  var destination = location.protocol + "//" + location.host + "/listdomains/";
-  var form_data = $('#add-domain-form').serializeArray();
-  form_map = { 'domain-name': form_data[0]['value'] }
-  var json_data = JSON.stringify(form_map);
+  document.getElementById('virtual-users').appendChild(spinner.el);
+  $('#get-alert-status').addClass('hidden');
+  data_table.clear();
+  var destination = location.protocol + "//" + location.host + "/listusers" + "?domain=" + domainID;
+  console.log(destination);
   var jqxhr = $.ajax({
-    type: 'POST',
+    type: "GET",
     url: destination,
-    data: json_data,
-    headers: {
-      "X-CSRF-Token": csrf_listdomains,
-    },
-    success: function(data, status) {
-      set_alert($('#manipulate-alert-status'), 'success', 'Added new virtual domain');
+    data: "",
+    success: function(data, status, request) {
+      csrf_listusers = request.getResponseHeader("X-CSRF-Token");
+      if(data) {
+        try {
+          var jsonDecoded = JSON.parse(data);
+          console.log(data);
+        }
+        catch(e) {
+          set_alert($('#get-alert-status'), 'error', 'Error getting users list: Invalid return syntax');
+        }
+      }
     }
-  })
-  .fail(function(jqXHR, textStatus, error) {
-    set_alert($('#manipulate-alert-status'), 'error', 'Error adding domain: ' + error);
+  }).fail(function(jqXHR, textStatus, error) {
+    set_alert($('#get-alert-status'), 'error', 'Error getting user list: ' + error);
   })
   .always(function() {
+    data_table.draw();
     spinner.stop();
-    fill_domains();
   });
 }
+
+// next stuff is from https://github.com/janl/mustache.js/blob/master/mustache.js
+// TODO use this more!
+var entityMap = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+  '/': '&#x2F;',
+  '`': '&#x60;',
+  '=': '&#x3D;'
+};
+
+function escapeHtml (string) {
+  return String(string).replace(/[&<>"'`=\/]/g, function (s) {
+    return entityMap[s];
+  });
+}
+
+// next function from http://www.jquerybyexample.net/2012/06/get-url-parameters-using-jquery.html
+// adjusted, however
+function getUrlParameter(sParam) {
+  var sPageURL = decodeURIComponent(window.location.search.substring(1)),
+      sURLVariables = sPageURL.split('&'),
+      sParameterName,
+      i;
+
+  for (i = 0; i < sURLVariables.length; i++) {
+      sParameterName = sURLVariables[i].split('=');
+
+      if (sParameterName[0] === sParam) {
+          return sParameterName[1] === undefined ? true : sParameterName[1];
+      }
+  }
+};
 
 /* The following code was taken from
 http://bootsnipp.com/snippets/featured/fancy-sidebar-navigation */

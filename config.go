@@ -236,8 +236,11 @@ func ParseConfig(configDir string) (*MailAppContext, error) {
 	if err := sessionController.Init(); err != nil {
 		res.Logger.Fatal("Unable to connect to database:", err)
 	}
+	logrusFormatter := logrus.TextFormatter{}
+	logrusFormatter.FullTimestamp = true
 
 	res.Logger.Level = logrus.InfoLevel
+	res.Logger.Formatter = &logrusFormatter
 
 	// start a goroutine to clear the sessions table
 	sessionController.DeleteEntriesDaemon(invalidKeyTimer, nil, true)

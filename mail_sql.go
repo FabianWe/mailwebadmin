@@ -32,7 +32,7 @@ import (
 
 	crypt "github.com/amoghe/go-crypt"
 	"github.com/gorilla/securecookie"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 func GenDovecotSHA512(password string) (string, error) {
@@ -66,6 +66,10 @@ func AddVirtualDomain(appContext *MailAppContext, domain string) (int64, error) 
 		return -1, err
 	}
 	id, _ := res.LastInsertId()
+	appContext.Logger.WithFields(log.Fields{
+		"domain-name": domain,
+		"domain-id":   id,
+	}).Info("Added new virtual domain")
 	return id, nil
 }
 
@@ -78,6 +82,8 @@ func DeleteVirtualDomain(appContext *MailAppContext, domainID int64) error {
 	}
 	if deleteNum != 1 {
 		appContext.Logger.WithField("domain-id", domainID).Warn("Domain for delete not found")
+	} else {
+		appContext.Logger.WithField("domain-id", domainID).Info("")
 	}
 	return nil
 }
@@ -384,7 +390,7 @@ func ListAllUsers(appContext *MailAppContext, domainID int64) (map[string]*ListU
 		// be an catch all in which case we don't want to put it here
 		name, _, emailErr := ParseMailParts(source)
 		if emailErr != nil {
-			appContext.Logger.WithFields(logrus.Fields{
+			appContext.Logger.WithFields(log.Fields{
 				"source":           source,
 				"dest":             virtualAlias.Dest,
 				"virtual-alias-id": virtualID,

@@ -126,6 +126,10 @@ func BootstrapDomainsTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/domains.html"))
 }
 
+func BootstrapUsersTemplate() *template.Template {
+	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/users.html"))
+}
+
 func RenderLoginTemplate(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	values := map[string]interface{}{
 		csrf.TemplateTag: csrf.TemplateField(r)}
@@ -134,6 +138,10 @@ func RenderLoginTemplate(appcontext *MailAppContext, w http.ResponseWriter, r *h
 
 func RenderDomainsTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	return appContext.Templates["domains"].ExecuteTemplate(w, "layout", nil)
+}
+
+func RenderUsersTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	return appContext.Templates["users"].ExecuteTemplate(w, "layout", nil)
 }
 
 func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
@@ -188,7 +196,7 @@ func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reque
 	if saveErr != nil {
 		appcontext.Logger.Error("Saving session failed", saveErr)
 	}
-	http.Redirect(w, r, "/welcome", 302)
+	http.Redirect(w, r, "/", 302)
 	return nil
 }
 
@@ -214,19 +222,46 @@ func RootPageHandler(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 		http.Error(w, fmt.Sprintf("Invalid method for \"/\": %s", r.Method), 400)
 		return nil
 	case getMethod:
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return nil
+		}
 		return RenderRootTemplate(appcontext, w, r)
+	}
+}
+
+var errNoID = errors.New("No id provided")
+
+func parseIDFromURL(regex *regexp.Regexp, url string) (int64, error) {
+	res := regex.FindStringSubmatch(url)
+	if res == nil {
+		return -1, errors.New("No match")
+	} else {
+		idPart := res[2]
+		// if no id was provided return -1 and errNoID
+		if idPart == "" {
+			return -1, errNoID
+		}
+		// try to parse int64
+		id, parseErr := strconv.ParseInt(idPart, 10, 64)
+		if parseErr != nil {
+			return -1, parseErr
+		}
+		// everything ok
+		return id, nil
 	}
 }
 
 var listDomainsRegex = regexp.MustCompile(`^/listdomains/((\d+)/?)?$`)
 
-func ParseListDomainURL(url string) (string, error) {
-	res := listDomainsRegex.FindStringSubmatch(url)
-	if res == nil {
-		return "", errors.New("No match")
-	} else {
-		return res[2], nil
-	}
+func parseListDomainURL(url string) (int64, error) {
+	return parseIDFromURL(listDomainsRegex, url)
+}
+
+var listUsersRegex = regexp.MustCompile(`^/listusers(/(\d+)/?)?$`)
+
+func parseListUsersURL(url string) (int64, error) {
+	return parseIDFromURL(listUsersRegex, url)
 }
 
 func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
@@ -270,15 +305,15 @@ func deleteDomain(domainID int64, appcontext *MailAppContext, w http.ResponseWri
 }
 
 func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
-	part, parseErr := ParseListDomainURL(r.URL.String())
-	if parseErr != nil {
+	domainID, parseErr := parseListDomainURL(r.URL.String())
+	if parseErr != nil && parseErr != errNoID {
 		http.NotFound(w, r)
 		return nil
 	}
 	switch r.Method {
 	case getMethod:
-		if part != "" {
-			http.Error(w, "Invalid request. Must be GET /listdomains/", 400)
+		if domainID >= 0 {
+			http.Error(w, "Invalid GET request. Must be GET /listdomains/", 400)
 			return nil
 		}
 		res, err := ListVirtualDomains(appcontext)
@@ -295,24 +330,64 @@ func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 		w.Write(jsonEnc)
 		return nil
 	case postMethod:
-		if part != "" {
-			http.Error(w, "Invalid request to /listdomains/.", 400)
+		if domainID >= 0 {
+			http.Error(w, "Invalid POST request to /listdomains/.", 400)
 			return nil
 		}
 		return addDomain(appcontext, w, r)
 	case deleteMethod:
-		if part == "" {
-			http.Error(w, "Invalid request to /listdomains/: No id given.", 400)
-			return nil
-		}
-		domainID, parseErr := strconv.ParseInt(part, 10, 64)
-		if parseErr != nil {
-			http.Error(w, "Invalid request to /listdomains/: Id is not an integer.", 400)
+		if domainID < 0 {
+			http.Error(w, "Invalid DELETE request to /listdomains/: No id given.", 400)
 			return nil
 		}
 		return deleteDomain(domainID, appcontext, w, r)
 	default:
-		http.Error(w, fmt.Sprintf("Invalid method for \"/\": %s", r.Method), 400)
+		http.Error(w, fmt.Sprintf("Invalid method for /listdomains/: %s", r.Method), 400)
+		return nil
+	}
+}
+
+func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	userID, parseErr := parseListUsersURL(r.URL.Path)
+	if parseErr != nil && parseErr != errNoID {
+		http.NotFound(w, r)
+		return nil
+	}
+	switch r.Method {
+	default:
+		http.Error(w, fmt.Sprintf("Invalid method for /listusers/: %s", r.Method), 400)
+		return nil
+	case getMethod:
+		if userID >= 0 {
+			http.Error(w, "Invalid GET request. Must be GET /listusers/", 400)
+			return nil
+		}
+		// TODO
+		var domainID int64 = -1
+		queryArgs := r.URL.Query()
+		if domainValues, has := queryArgs["domain"]; has {
+			if len(domainValues) != 1 {
+				http.Error(w, "Invalid GET request. query params must contain at most one domain=DOMAIN-ID", 400)
+				return nil
+			}
+			// get first element and try to parse it as an int
+			if domainID, parseErr = strconv.ParseInt(domainValues[0], 10, 64); parseErr != nil {
+				http.Error(w, "Invalid GET request. query params must contain at most one domain=DOMAIN-ID. DOMAIN-ID must be an int.", 400)
+				return nil
+			}
+		}
+		users, err := ListAllUsers(appcontext, domainID)
+		if err != nil {
+			return err
+		}
+		// set csrf header
+		w.Header().Set("X-CSRF-Token", csrf.Token(r))
+		// create json encoding
+		jsonEnc, jsonErr := json.Marshal(users)
+		if jsonErr != nil {
+			return jsonErr
+		}
+		w.Write(jsonEnc)
 		return nil
 	}
 }
