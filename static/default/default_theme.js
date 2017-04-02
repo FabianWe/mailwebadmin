@@ -132,7 +132,8 @@ function remove_domain_button(domain_name, domainID) {
             delete_confirm('Delete Virtual Domain?',
               'Are you sure that you want to create the virtual domain <b>' +
               domain_name +
-              '</b>? This will delete all users and aliases for this domain as well!',
+              '</b>? This will delete all users and aliases for this domain as well!' +
+              '<p/>Maybe also all the emails for this domain.',
               function(result) {
                 if(result) {
                   delete_domain(domainID)

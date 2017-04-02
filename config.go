@@ -31,6 +31,7 @@ import (
 	"html/template"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -51,6 +52,9 @@ type MailAppContext struct {
 	Templates              map[string]*template.Template
 	DefaultSessionLifespan time.Duration
 	Port                   int
+	MailDir                string
+	Delete                 bool
+	Backup                 string
 }
 
 func (context *MailAppContext) ReadOrCreateKeys() {
@@ -145,6 +149,9 @@ func GenKeyPair() ([][]byte, error) {
 
 type tomlConfig struct {
 	Port         int
+	MailDir      string `toml:"maildir"`
+	Delete       bool
+	Backup       string
 	DB           dbInfo       `toml:"mysql"`
 	TimeSettings timeSettings `toml:"timers"`
 }
@@ -190,6 +197,14 @@ func ParseConfig(configDir string) (*MailAppContext, error) {
 	if conf.DB.DBName == "" {
 		conf.DB.DBName = "mailserver"
 	}
+	if conf.MailDir == "" {
+		conf.MailDir = "/var/vmail/%d/%n"
+	}
+
+	if !strings.Contains(conf.MailDir, "%d") || !strings.Contains(conf.MailDir, "%n") {
+		return nil, errors.New("Invalid maildir in conf: Must contain %d and %n")
+	}
+
 	var confDBStr string
 
 	if conf.DB.Password == "" {
@@ -227,6 +242,9 @@ func ParseConfig(configDir string) (*MailAppContext, error) {
 
 	res.DefaultSessionLifespan = sessionLifespan
 	res.Port = conf.Port
+	res.MailDir = conf.MailDir
+	res.Delete = conf.Delete
+	res.Backup = conf.Backup
 
 	res.ReadOrCreateKeys()
 

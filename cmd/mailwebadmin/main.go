@@ -43,12 +43,12 @@ func main() {
 	flag.Parse()
 	configDir, configDirParseErr := filepath.Abs(*configDirPtr)
 	if configDirParseErr != nil {
-		log.Fatal("Can't parse config dir path: ", configDir)
+		log.WithError(configDirParseErr).Fatal("Can't parse config dir path: ", configDir)
 	}
 
 	appContext, configErr := mailwebadmin.ParseConfig(configDir)
 	if configErr != nil {
-		log.Fatal(configErr)
+		log.WithError(configErr).Fatal("Can't parse config file(s)")
 	}
 	http.Handle("/static/", mailwebadmin.StaticHandler())
 	http.Handle("/favicon.ico", http.FileServer(http.Dir("static")))
@@ -63,6 +63,7 @@ func main() {
 	http.Handle("/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderDomainsTemplate)))
 	http.Handle("/listusers", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListUsersJSON)))
 	http.Handle("/users", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderUsersTemplate)))
+	appContext.Logger.WithField("port", appContext.Port).Info("Ready. Waiting for requests.")
 	appContext.Logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", appContext.Port),
 		csrf.Protect(appContext.Keys[len(appContext.Keys)-1], csrf.Secure(false))(context.ClearHandler(http.DefaultServeMux))))
 }

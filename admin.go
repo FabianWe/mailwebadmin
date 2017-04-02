@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/FabianWe/goauth"
 	"github.com/gorilla/csrf"
@@ -280,6 +281,11 @@ func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
+	domainLen := utf8.RuneCountInString(domainData.DomainName)
+	if domainLen > 50 {
+		http.Error(w, "Domain length must be <= 50", 400)
+		return nil
+	}
 	// try to add the domain, we write the result new id back to the writer
 	domainID, err := AddVirtualDomain(appcontext, domainData.DomainName)
 	if err != nil {
@@ -300,6 +306,35 @@ func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reques
 }
 
 func deleteDomain(domainID int64, appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	// first: check if the delete option is set, if so create backup if required and
+	// delete
+	if appcontext.Delete {
+		// lookup domain name before deletion
+		name, err := getDomainName(appcontext, domainID)
+		// start a go routine, we don't want the user to wait
+		go func() {
+			if err != nil {
+				appcontext.Logger.WithError(err).WithField("domain-id", domainID).Error("Can't create backup of domain directory, NOT deleting directory")
+				return
+			}
+			// backupr if requested
+			if appcontext.Backup != "" {
+				if backupErr := zipDomainDir(appcontext.Backup, appcontext.MailDir, name); backupErr != nil {
+					appcontext.Logger.WithError(backupErr).WithField("domain-name", name).Error("Can't create backup of domain. NOT deleting directory")
+					return
+				} else {
+					appcontext.Logger.WithField("domain-name", name).Info("Created backup for domain")
+				}
+			}
+			// delete directory
+			if delErr := deleteDomainDir(appcontext.MailDir, name); delErr != nil {
+				appcontext.Logger.WithError(delErr).WithField("domain-name", name).Error("Can't delete domain directory")
+				return
+			} else {
+				appcontext.Logger.WithField("domain-name", name).Info("Deleted domain directory.")
+			}
+		}()
+	}
 	// try to remove the domain
 	return DeleteVirtualDomain(appcontext, domainID)
 }

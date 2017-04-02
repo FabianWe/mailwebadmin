@@ -83,7 +83,7 @@ func DeleteVirtualDomain(appContext *MailAppContext, domainID int64) error {
 	if deleteNum != 1 {
 		appContext.Logger.WithField("domain-id", domainID).Warn("Domain for delete not found")
 	} else {
-		appContext.Logger.WithField("domain-id", domainID).Info("")
+		appContext.Logger.WithField("domain-id", domainID).Info("Deleted domain")
 	}
 	return nil
 }
