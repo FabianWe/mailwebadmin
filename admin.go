@@ -166,7 +166,7 @@ func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reque
 	// Validate the user
 	userId, checkErr := appcontext.UserHandler.Validate(loginData.Username, []byte(loginData.Password))
 	if checkErr == goauth.ErrUserNotFound {
-		appcontext.Logger.WithField("username", loginData.Username).Info("Login attempt with unkown username")
+		appcontext.Logger.WithField("username", loginData.Username).WithField("remote", r.RemoteAddr).Info("Login attempt with unkown username")
 		http.Error(w, "Login failed", 400)
 		return nil
 	}
@@ -177,7 +177,7 @@ func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reque
 	}
 	if userId == goauth.NoUserID {
 		// login failed
-		appcontext.Logger.WithField("username", loginData.Username).Warn("Failed log in attempt")
+		appcontext.Logger.WithField("username", loginData.Username).WithField("remote", r.RemoteAddr).Warn("Failed log in attempt")
 		http.Error(w, "Login failed", 400)
 		return nil
 	}
@@ -282,9 +282,8 @@ func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
-	domainLen := utf8.RuneCountInString(domainData.DomainName)
-	if domainLen > 50 {
-		http.Error(w, "Domain length must be <= 50", 400)
+	if domainLen := utf8.RuneCountInString(domainData.DomainName); domainLen > 50 || domainLen == 0 {
+		http.Error(w, "Domain length must be not empty and <= 50 characters", 400)
 		return nil
 	}
 	// try to add the domain, we write the result new id back to the writer
@@ -383,6 +382,50 @@ func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 	}
 }
 
+func addMail(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	body, readErr := ioutil.ReadAll(r.Body)
+	if readErr != nil {
+		appContext.Logger.Info("Invalid request syntax to add a user")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	var userData struct {
+		Password, Mail string
+	}
+	jsonErr := json.Unmarshal(body, &userData)
+	if jsonErr != nil {
+		appContext.Logger.Info("Invalid request syntax to add a user")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	if userLen := utf8.RuneCountInString(userData.Mail); userLen == 0 || userLen > 100 {
+		appContext.Logger.WithField("mail", userData.Mail).Warn("Attempt to add a user with too long / short mail")
+		return nil
+	}
+	if pwLen := utf8.RuneCountInString(userData.Password); pwLen < 6 {
+		appContext.Logger.Warn("Attempt to add a user with a too short password")
+		http.Error(w, "Password length too short", 400)
+		return nil
+	}
+	// add user
+	userID, addErr := AddMailUser(appContext, userData.Mail, userData.Password)
+	if addErr != nil {
+		return addErr
+	}
+	res := make(map[string]interface{})
+	res["user-id"] = userID
+	// encode to json
+	jsonEnc, jsonEncErr := json.Marshal(res)
+	if jsonEncErr != nil {
+		// just log the error, but the insertion took place, so we return nil
+		appContext.Logger.WithField("map", res).WithError(jsonEncErr).Warn("Can't enocode map to JSON")
+		return nil
+	}
+	// everything ok
+	w.Write(jsonEnc)
+	return nil
+}
+
 func changePassword(userID int64, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	body, readErr := ioutil.ReadAll(r.Body)
 	if readErr != nil {
@@ -405,6 +448,11 @@ func changePassword(userID int64, appContext *MailAppContext, w http.ResponseWri
 		return nil
 	}
 	return ChangeUserPassword(appContext, userID, pwData.Password)
+}
+
+func deleteMail(userid int64, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	// TODO
+	return nil
 }
 
 func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
@@ -450,9 +498,21 @@ func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Re
 		return nil
 	case updateMethod:
 		if userID < 0 {
-			http.Error(w, "Invalid DELETE request to /listusers/: No id given.", 400)
+			http.Error(w, "Invalid UPDATE request to /listusers/: No id given.", 400)
 			return nil
 		}
 		return changePassword(userID, appcontext, w, r)
+	case postMethod:
+		if userID >= 0 {
+			http.Error(w, "Invalid POST request to /listusers/.", 400)
+			return nil
+		}
+		return addMail(appcontext, w, r)
+	case deleteMethod:
+		if userID < 0 {
+			http.Error(w, "Invalid DELETE request to /listusers/: No id given.", 400)
+			return nil
+		}
+		return deleteMail(userID, appcontext, w, r)
 	}
 }

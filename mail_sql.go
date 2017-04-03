@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+// TODO add logging everyhwere!
+
 package mailwebadmin
 
 import (
@@ -124,6 +126,7 @@ func AddMailUser(appContext *MailAppContext, email, plaintextPW string) (int64, 
 	// encrypt the password
 	pwHash, pwErr := GenDovecotSHA512(plaintextPW)
 	if pwErr != nil {
+		appContext.Logger.WithError(pwErr).Error("Error while encrypting password")
 		return -1, pwErr
 	}
 	// get the domain id
@@ -135,8 +138,10 @@ func AddMailUser(appContext *MailAppContext, email, plaintextPW string) (int64, 
 	query := "INSERT INTO virtual_users (domain_id, email, password) VALUES(?, ?, ?);"
 	res, insertErr := appContext.DB.Exec(query, domainID, email, pwHash)
 	if insertErr != nil {
+		appContext.Logger.WithError(insertErr).WithField("email", email).Error("Error inserting email into database")
 		return -1, insertErr
 	}
+	appContext.Logger.WithField("email", email).Info("Added new email")
 	id, _ := res.LastInsertId()
 	return id, nil
 }

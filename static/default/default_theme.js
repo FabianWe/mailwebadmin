@@ -144,7 +144,26 @@ function remove_domain_button(domain_name, domainID) {
 }
 
 function delete_user(userID) {
-  console.log("DEL");
+  var spinner = new Spinner().spin();
+  document.getElementById('virtual-users').appendChild(spinner.el);
+  var destination = location.protocol + "//" + location.host + "/listusers/" + userID + "/";
+  var jqxhr = $.ajax({
+    type: "DELETE",
+    url: destination,
+    headers: {
+        "X-CSRF-Token": csrf_listusers,
+    },
+    success: function(data, status) {
+      set_alert($('#manipulate-alert-status'), 'success', 'Successfully removed user');
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+    set_alert($('#manipulate-alert-status'), 'error', 'Error removing user: ' + error);
+  })
+  .always(function() {
+    fill_users();
+    spinner.stop();
+  });
 }
 
 function remove_user_button(user_mail, user_id) {
@@ -247,6 +266,37 @@ function fill_domains() {
   .always(function() {
     data_table.draw();
     spinner.stop();
+  });
+}
+
+function add_user() {
+  var spinner = new Spinner().spin();
+  document.getElementById('virtual-users').appendChild(spinner.el);
+  var destination = location.protocol + "//" + location.host + "/listusers";
+  var form_data = $('#add-user-form').serializeArray();
+  form_map = { 'mail': form_data[0]['value'], 'password': form_data[1]['value'] }
+  if (form_data[1]['value'].length < 6) {
+    bootbox.alert("Password must be at least six characters long")
+    return
+  }
+  var json_data = JSON.stringify(form_map);
+  var jqxhr = $.ajax({
+    type: 'POST',
+    url: destination,
+    data: json_data,
+    headers: {
+      "X-CSRF-Token": csrf_listusers,
+    },
+    success: function(data, status) {
+      set_alert($('#manipulate-alert-status'), 'success', 'Added new user');
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+    set_alert($('#manipulate-alert-status'), 'error', 'Error adding user: ' + error);
+  })
+  .always(function() {
+    spinner.stop();
+    fill_users();
   });
 }
 

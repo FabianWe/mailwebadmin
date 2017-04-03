@@ -34,7 +34,7 @@ var csrf_listusers = null
 $(document).ready(function() {
   $("#add-user-form").submit(function(event) {
     event.preventDefault();
-    // TODO
+    add_user();
   });
     data_table = $('#virtual-users').DataTable( {
       "columnDefs": [
