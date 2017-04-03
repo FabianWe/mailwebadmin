@@ -38,7 +38,7 @@ $(document).ready(function() {
   });
     data_table = $('#virtual-users').DataTable( {
       "columnDefs": [
-        { "searchable": false, "orderable": false, "targets": 3 }
+        { "searchable": false, "orderable": false, "targets": [2, 3] }
       ]
     });
     fill_users();
@@ -59,17 +59,24 @@ $(document).ready(function() {
             <label for="user-mail">User</label>
             <input type="email" class="form-control" id="user-email" name="user-email" maxlength="100" placeholder="Email">
         </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" class="form-control" id="password" name="password" placeholder="Password">
+        </div>
         <button type="submit" class="btn btn-primary" id="submit-button">Add User</button>
     </form>
 </div>
 
 <h2>Virtual Users List</h2>
+Virtual users are displayed in <span class="virtual-user">green</span>,
+accounts that are only an alias are displayed in <span class="only-alias">orange</span>.
+<p/>
 <table id="virtual-users" class="table table-striped table-bordered" cellspacing="0" width="100%">
   <thead>
     <tr>
       <td>Email</td>
-      <td>Domain</td>
       <td>Alias for</td>
+      <td>Change Password</td>
       <td>Delete</td>
     </tr>
   </thead>

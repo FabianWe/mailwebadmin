@@ -46,6 +46,7 @@ const (
 	getMethod    = "GET"
 	postMethod   = "POST"
 	deleteMethod = "DELETE"
+	updateMethod = "UPDATE"
 )
 
 func IsValidMail(email string) error {
@@ -382,6 +383,30 @@ func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 	}
 }
 
+func changePassword(userID int64, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	body, readErr := ioutil.ReadAll(r.Body)
+	if readErr != nil {
+		appContext.Logger.Info("Invalid request syntax to change password")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	var pwData struct {
+		Password string
+	}
+	jsonErr := json.Unmarshal(body, &pwData)
+	if jsonErr != nil {
+		appContext.Logger.Info("Invalid request syntax to change password")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	if pwLen := utf8.RuneCountInString(pwData.Password); pwLen < 6 {
+		appContext.Logger.Warn("Attempt to change password to a password of length < 6")
+		http.Error(w, "Password length too short", 400)
+		return nil
+	}
+	return ChangeUserPassword(appContext, userID, pwData.Password)
+}
+
 func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	userID, parseErr := parseListUsersURL(r.URL.Path)
 	if parseErr != nil && parseErr != errNoID {
@@ -397,7 +422,6 @@ func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Re
 			http.Error(w, "Invalid GET request. Must be GET /listusers/", 400)
 			return nil
 		}
-		// TODO
 		var domainID int64 = -1
 		queryArgs := r.URL.Query()
 		if domainValues, has := queryArgs["domain"]; has {
@@ -424,5 +448,11 @@ func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Re
 		}
 		w.Write(jsonEnc)
 		return nil
+	case updateMethod:
+		if userID < 0 {
+			http.Error(w, "Invalid DELETE request to /listusers/: No id given.", 400)
+			return nil
+		}
+		return changePassword(userID, appcontext, w, r)
 	}
 }

@@ -157,6 +157,8 @@ func ChangeUserPassword(appContext *MailAppContext, emailID int64, plaintextPW s
 	if numUpdate != 1 {
 		appContext.Logger.WithField("email-id", emailID).Warn("Update of email failed: email not found in virtual_users")
 		return fmt.Errorf("Update password failed: email id \"%d\" not found in virtual_users", emailID)
+	} else {
+		appContext.Logger.WithField("email-id", emailID).Info("Changed email password")
 	}
 	return nil
 }
@@ -306,13 +308,13 @@ func ListVirtualAliases(appContext *MailAppContext, domainID int64) (map[int64]*
 	defer rows.Close()
 	res := make(map[int64]*Alias)
 	for rows.Next() {
-		var id, domainID int64
+		var id, resDomainID int64
 		var source, dest string
-		scanErr := rows.Scan(&id, &domainID, &source, &dest)
+		scanErr := rows.Scan(&id, &resDomainID, &source, &dest)
 		if scanErr != nil {
 			return nil, scanErr
 		}
-		res[id] = &Alias{DomainID: domainID, Source: source, Dest: dest}
+		res[id] = &Alias{DomainID: resDomainID, Source: source, Dest: dest}
 	}
 	err = rows.Err()
 	if err != nil {
@@ -384,6 +386,7 @@ func ListAllUsers(appContext *MailAppContext, domainID int64) (map[string]*ListU
 	// now for each alias: if the entry already exists (from virtual_users)
 	// then just add the alias. Otherwise add a new result with
 	// VirtualUserID = -1 and VirtualUser = nil
+	// important: we're interested in the destination of the alias, not the source!
 	for virtualID, virtualAlias := range virtualAliases {
 		source := virtualAlias.Source
 		// first check that we can parse the source mail correctly, it could

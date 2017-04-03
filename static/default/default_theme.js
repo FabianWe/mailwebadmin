@@ -130,16 +130,84 @@ function remove_domain_button(domain_name, domainID) {
           .append( $('<span class="glyphicon glyphicon-remove" style="color:red"></span>') )
           .click(function() {
             delete_confirm('Delete Virtual Domain?',
-              'Are you sure that you want to create the virtual domain <b>' +
+              'Are you sure that you want to delete the virtual domain <b>' +
               domain_name +
               '</b>? This will delete all users and aliases for this domain as well!' +
               '<p/>Maybe also all the emails for this domain.',
               function(result) {
                 if(result) {
-                  delete_domain(domainID)
+                  delete_domain(domainID);
                 }
               }
             )
+          });
+}
+
+function delete_user(userID) {
+  console.log("DEL");
+}
+
+function remove_user_button(user_mail, user_id) {
+  return $('<button type="button" class="btn btn-default"></button>')
+          .append( $('<span class="glyphicon glyphicon-remove" style="color:red"></span>') )
+          .click(function() {
+            delete_confirm('Delete Virtual User?',
+              'Are you sure that you want to delete the virtual user <b>' +
+              user_mail +
+              '</b>? This may also delete all emails for this user!' +
+              '<p/>Also you should check your aliases (was some email forwarded to this user?).',
+              function(result) {
+                if(result) {
+                  delete_user(user_id);
+                }
+              }
+            )
+          });
+}
+
+function change_password(user_id, password) {
+  if (password.length < 6) {
+    bootbox.alert("Password must be at least six characters long")
+    return
+  }
+  var spinner = new Spinner().spin();
+  document.getElementById('virtual-users').appendChild(spinner.el);
+  var destination = location.protocol + "//" + location.host + "/listusers/" + user_id + "/";
+  var jqxhr = $.ajax({
+    type: "UPDATE",
+    url: destination,
+    data: JSON.stringify( { "password": password } ),
+    headers: {
+        "X-CSRF-Token": csrf_listusers,
+    },
+    success: function(data, status) {
+      set_alert($('#manipulate-alert-status'), 'success', 'Successfully changed password');
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+    set_alert($('#manipulate-alert-status'), 'error', 'Error changing password: ' + error);
+  })
+  .always(function() {
+    spinner.stop();
+  });
+}
+
+function change_password_button(user_mail, user_id) {
+  return $('<button type="button" class="btn btn-default"></button>')
+          .append( $('<span class="glyphicon glyphicon-lock" style="color:teal"></span>') )
+          .click(function() {
+            bootbox.prompt({
+              title: "Change Password for <b>" + escapeHtml(user_mail) + "</b>",
+              inputType: 'password',
+              callback: function (result) {
+                if (result === null) {
+                  bootbox.alert("Password not changed")
+                }
+                else {
+                  change_password(user_id, result);
+                }
+              }
+            });
           });
 }
 
@@ -162,7 +230,7 @@ function fill_domains() {
             if(jsonDecoded.hasOwnProperty(domainID)) {
               var domain_name = jsonDecoded[domainID];
               var button = remove_domain_button(domain_name, domainID)
-              var button_td = $('<td></td>').append(button);
+              var button_td = $('<td class="datatable-button"></td>').append(button);
               var jqueryRow = $('<tr></tr>').append( $('<td></td>').html('<a href="/users?domain=' + domainID + '">' + escapeHtml(domain_name) + "</a>"), button_td );
               data_table.row.add(jqueryRow);
             }
@@ -193,7 +261,6 @@ function fill_users() {
   $('#get-alert-status').addClass('hidden');
   data_table.clear();
   var destination = location.protocol + "//" + location.host + "/listusers" + "?domain=" + domainID;
-  console.log(destination);
   var jqxhr = $.ajax({
     type: "GET",
     url: destination,
@@ -203,7 +270,35 @@ function fill_users() {
       if(data) {
         try {
           var jsonDecoded = JSON.parse(data);
-          console.log(data);
+          for(var mail in jsonDecoded) {
+            if (jsonDecoded.hasOwnProperty(mail)) {
+              var entry = jsonDecoded[mail];
+              var aliases = [];
+              var aliasDict = entry['AliasFor'];
+              for (var aliasEntry in aliasDict) {
+                if (aliasDict.hasOwnProperty(aliasEntry)) {
+                  aliases.push(aliasDict[aliasEntry]["Dest"]);
+                }
+              }
+              var virtual_user = entry["VirtualUser"];
+              if (virtual_user) {
+                var virtualUserID = entry["VirtualUserID"];
+                var jqueryRow = $('<tr></tr>')
+                  .append( $('<td class="virtual-user"></td>').text(mail) )
+                  .append( $('<td></td>').text(aliases.join(', ')) )
+                  .append( $('<td class="datatable-button"></td>').html(change_password_button(mail, virtualUserID)) )
+                  .append( $('<td class="datatable-button"></td>').html(remove_user_button(mail, virtualUserID)) );
+                data_table.row.add(jqueryRow);
+              } else {
+                var jqueryRow = $('<tr></tr>')
+                  .append( $('<td class="only-alias"></td>').text(mail) )
+                  .append( $('<td></td>').text(aliases.join(', ')) )
+                  .append( $('<td></td>') )
+                  .append( $('<td></td>') );
+                data_table.row.add(jqueryRow);
+              }
+            }
+          }
         }
         catch(e) {
           set_alert($('#get-alert-status'), 'error', 'Error getting users list: Invalid return syntax');
