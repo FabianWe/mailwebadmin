@@ -121,7 +121,7 @@ func BootstrapLoginTemplate() *template.Template {
 }
 
 func RootBootstrapTemplate() *template.Template {
-	return template.Must(template.ParseFiles("templates/default/base.html"))
+	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/home.html"))
 }
 
 func BootstrapDomainsTemplate() *template.Template {

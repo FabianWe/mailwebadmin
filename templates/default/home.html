@@ -1,0 +1,67 @@
+<!-- The MIT License (MIT)
+
+Copyright (c) 2017 Fabian Wenzelmann
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. -->
+
+{{ define "content" }}
+<h1>Mail Web Admin</h1>
+Welcome to the mail admin interface. Here is a small HowTo, you should
+understand what you are doing!
+
+<h2>Virtual Domains</h2>
+Add new virtual domains in the <a href="/domains">Virtual Domains section</a>.
+If your DNS settings are correct (i.e. mails for your domain example.com
+are processed by your mailsever) you have to add it as a virtual domain.</p>
+So simply add example.com as a new virtual domain in order to generate mailing
+accounts like user@example.com
+
+<h2>Virtual Users</h2>
+Virtual Users are all the mailing accounts you receive mails for. See the
+<a href="/users">Virtual Users Section</a> to add new mailing users.</p>
+On this site all mailing accounts available are listed. This also includes
+&quot;accounts&quot; that are just an alias for another account, i.e.
+all mails to that account are forwarded to another address.
+See section Aliases for more details about aliases.
+
+<h3>Aliases</h3>
+An alias is used to forward mails for an email account to another email. This
+other email must not be on the same sever but could be any valid email address.
+There are two ways you can add aliases:
+<dl>
+  <dt>Only alias:</dt>
+  <dd>In this case the email is just forwarded to another mail adress,
+  for example: All mails to info@example.com should be forwarded to admin@example.com
+  Don't create an user account for info@example.com, just add an alias
+  info@example.com &#x2192; admin@example.com
+  </dd>
+  <dt>Alias that also receives a copy</dt>
+  <dd>To forward all emails from info@example.com
+    to admin@example.com but have info@example.com to also receive emails
+    (stored on disk): Add a user info@example.com and than add an alias
+    info@example.com &#x2192; admin@example.com
+  </dd>
+</dl>
+There can be more than one alias for one emails address. If you want
+to forward all emails to info@example.com to peter@example.com and susie@example.com
+add two aliases: info@example.com &#x2192; peter@example.com and
+info@example.com &#x2192; susie@example.com
+</p>
+Catch all aliases are not supported since they're always a bad idea.
+{{ end }}
