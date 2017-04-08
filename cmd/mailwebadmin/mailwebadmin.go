@@ -66,6 +66,7 @@ func main() {
 
 		// start the interface
 		http.Handle("/login/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginPageHandler))
+		http.Handle("/logout/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.Logout)))
 		http.Handle("/license/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.RenderLicenseTemplate))
 		http.Handle("/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RootPageHandler)))
 		http.Handle("/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderDomainsTemplate)))

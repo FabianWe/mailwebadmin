@@ -108,10 +108,36 @@ func LoginRequired(f AppHandleFunc) AppHandleFunc {
 			}
 		}
 		if saveErr := session.Save(r, w); saveErr != nil {
-			appcontext.Logger.Error("Saving session failed", saveErr)
+			appcontext.Logger.WithError(saveErr).Error("Saving session failed")
 		}
 		return f(appcontext, w, r)
 	}
+}
+
+func Logout(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	// try to get the key
+	session, sessionErr := appcontext.SessionController.GetSession(r, appcontext.Store)
+	if sessionErr != nil {
+		appcontext.Logger.WithField("remote", r.RemoteAddr).WithError(sessionErr).Warn("Log out with invalid session")
+	} else {
+		// set session max age to 0
+		session.Options.MaxAge = -1
+		if saveErr := session.Save(r, w); saveErr != nil {
+			appcontext.Logger.WithError(saveErr).Error("Failed to save session")
+		}
+		// try to get the key
+		key, keyErr := appcontext.SessionController.GetKey(session)
+		if keyErr != nil {
+			appcontext.Logger.WithField("remote", r.RemoteAddr).WithError(keyErr).Warn("Log out with invalid session")
+		} else {
+			// finally we have the key and now we can remove the session
+			if delErr := appcontext.SessionController.DeleteKey(key); delErr != nil {
+				appcontext.Logger.WithField("remote", r.RemoteAddr).WithError(delErr).Error("Can't delete auth session key, this may be problematic!")
+			}
+		}
+	}
+	http.Redirect(w, r, "/login/", 302)
+	return nil
 }
 
 func BootstrapLoginTemplate() *template.Template {
@@ -180,7 +206,7 @@ func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reque
 	// Validate the user
 	userId, checkErr := appcontext.UserHandler.Validate(loginData.Username, []byte(loginData.Password))
 	if checkErr == goauth.ErrUserNotFound {
-		appcontext.Logger.WithField("username", loginData.Username).WithField("remote", r.RemoteAddr).Info("Login attempt with unkown username")
+		appcontext.Logger.WithField("username", loginData.Username).WithField("remote", r.RemoteAddr).Warn("Login attempt with unkown username")
 		http.Error(w, "Login failed", 400)
 		return nil
 	}
