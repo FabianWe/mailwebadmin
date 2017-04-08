@@ -37,9 +37,10 @@ import (
 )
 
 func main() {
-	// parse config dir flag
+	// parse cmd options
 
 	configDirPtr := flag.String("config", "./config", "Directory to store the configuration files.")
+	apiOnlyPtr := flag.Bool("api-only", false, "If set only the API services are started, not the user interface")
 	flag.Parse()
 	configDir, configDirParseErr := filepath.Abs(*configDirPtr)
 	if configDirParseErr != nil {
@@ -52,24 +53,31 @@ func main() {
 	}
 	http.Handle("/static/", mailwebadmin.StaticHandler())
 	http.Handle("/favicon.ico", http.FileServer(http.Dir("static")))
-	// get the templates
-	appContext.Templates["login"] = mailwebadmin.BootstrapLoginTemplate()
-	appContext.Templates["root"] = mailwebadmin.RootBootstrapTemplate()
-	appContext.Templates["domains"] = mailwebadmin.BootstrapDomainsTemplate()
-	appContext.Templates["users"] = mailwebadmin.BootstrapUsersTemplate()
-	appContext.Templates["aliases"] = mailwebadmin.BootstrapAliasesTemplate()
-	appContext.Templates["license"] = mailwebadmin.BootstrapLicenseTemplate()
-	http.Handle("/login/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginPageHandler))
-	http.Handle("/license/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.RenderLicenseTemplate))
-	http.Handle("/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RootPageHandler)))
+
+	// if api only is set to false start the user interface
+	if !*apiOnlyPtr {
+		// get the templates
+		appContext.Templates["login"] = mailwebadmin.BootstrapLoginTemplate()
+		appContext.Templates["root"] = mailwebadmin.RootBootstrapTemplate()
+		appContext.Templates["domains"] = mailwebadmin.BootstrapDomainsTemplate()
+		appContext.Templates["users"] = mailwebadmin.BootstrapUsersTemplate()
+		appContext.Templates["aliases"] = mailwebadmin.BootstrapAliasesTemplate()
+		appContext.Templates["license"] = mailwebadmin.BootstrapLicenseTemplate()
+
+		// start the interface
+		http.Handle("/login/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginPageHandler))
+		http.Handle("/license/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.RenderLicenseTemplate))
+		http.Handle("/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RootPageHandler)))
+		http.Handle("/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderDomainsTemplate)))
+		http.Handle("/users", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderUsersTemplate)))
+		http.Handle("/aliases/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderAliasesTemplate)))
+	}
+
 	http.Handle("/api/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListDomainsJSON)))
-	http.Handle("/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderDomainsTemplate)))
 	http.Handle("/api/users", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListUsersJSON)))
 	// really annoying, but I see no other way around this...
-	// we want both /listusers and /listusers/
+	// we want both /users and /users/
 	http.Handle("/api/users/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListUsersJSON)))
-	http.Handle("/users", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderUsersTemplate)))
-	http.Handle("/aliases/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderAliasesTemplate)))
 	http.Handle("/api/aliases/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListAliasesJSON)))
 	appContext.Logger.WithField("port", appContext.Port).Info("Ready. Waiting for requests.")
 	appContext.Logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", appContext.Port),
