@@ -57,15 +57,19 @@ func main() {
 	appContext.Templates["root"] = mailwebadmin.RootBootstrapTemplate()
 	appContext.Templates["domains"] = mailwebadmin.BootstrapDomainsTemplate()
 	appContext.Templates["users"] = mailwebadmin.BootstrapUsersTemplate()
+	appContext.Templates["aliases"] = mailwebadmin.BootstrapAliasesTemplate()
+	appContext.Templates["license"] = mailwebadmin.BootstrapLicenseTemplate()
 	http.Handle("/login/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginPageHandler))
+	http.Handle("/license/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.RenderLicenseTemplate))
 	http.Handle("/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RootPageHandler)))
-	http.Handle("/listdomains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListDomainsJSON)))
+	http.Handle("/api/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListDomainsJSON)))
 	http.Handle("/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderDomainsTemplate)))
-	http.Handle("/listusers", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListUsersJSON)))
+	http.Handle("/api/users", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListUsersJSON)))
 	// really annoying, but I see no other way around this...
 	// we want both /listusers and /listusers/
-	http.Handle("/listusers/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListUsersJSON)))
+	http.Handle("/api/users/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListUsersJSON)))
 	http.Handle("/users", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderUsersTemplate)))
+	http.Handle("/aliases/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderAliasesTemplate)))
 	appContext.Logger.WithField("port", appContext.Port).Info("Ready. Waiting for requests.")
 	appContext.Logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", appContext.Port),
 		csrf.Protect(appContext.Keys[len(appContext.Keys)-1], csrf.Secure(false))(context.ClearHandler(http.DefaultServeMux))))

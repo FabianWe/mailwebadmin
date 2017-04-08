@@ -77,7 +77,8 @@ function set_alert(alert_obj, status, html) {
 function add_domain() {
   var spinner = new Spinner().spin();
   document.getElementById('virtual-domains').appendChild(spinner.el);
-  var destination = location.protocol + "//" + location.host + "/listdomains/";
+  // var destination = location.protocol + "//" + location.host + "/listdomains/";
+  var destination = location.protocol + "//" + location.host + "/api/domains/";
   var form_data = $('#add-domain-form').serializeArray();
   form_map = { 'domain-name': form_data[0]['value'] }
   var json_data = JSON.stringify(form_map);
@@ -105,7 +106,8 @@ function add_domain() {
 function delete_domain(domainID) {
   var spinner = new Spinner().spin();
   document.getElementById('virtual-domains').appendChild(spinner.el);
-  var destination = location.protocol + "//" + location.host + "/listdomains/" + domainID + "/";
+  // var destination = location.protocol + "//" + location.host + "/listdomains/" + domainID + "/";
+  var destination = location.protocol + "//" + location.host + "/api/domains/" + domainID + "/";
   var jqxhr = $.ajax({
     type: "DELETE",
     url: destination,
@@ -146,7 +148,8 @@ function remove_domain_button(domain_name, domainID) {
 function delete_user(userID) {
   var spinner = new Spinner().spin();
   document.getElementById('virtual-users').appendChild(spinner.el);
-  var destination = location.protocol + "//" + location.host + "/listusers/" + userID + "/";
+  // var destination = location.protocol + "//" + location.host + "/listusers/" + userID + "/";
+  var destination = location.protocol + "//" + location.host + "/api/users/" + userID + "/";
   var jqxhr = $.ajax({
     type: "DELETE",
     url: destination,
@@ -191,7 +194,8 @@ function change_password(user_id, password) {
   }
   var spinner = new Spinner().spin();
   document.getElementById('virtual-users').appendChild(spinner.el);
-  var destination = location.protocol + "//" + location.host + "/listusers/" + user_id + "/";
+  // var destination = location.protocol + "//" + location.host + "/listusers/" + user_id + "/";
+  var destination = location.protocol + "//" + location.host + "/api/users/" + user_id + "/";
   var jqxhr = $.ajax({
     type: "UPDATE",
     url: destination,
@@ -235,7 +239,8 @@ function fill_domains() {
   document.getElementById('virtual-domains').appendChild(spinner.el);
   $('#get-alert-status').addClass('hidden');
   data_table.clear();
-  var destination = location.protocol + "//" + location.host + "/listdomains/";
+  // var destination = location.protocol + "//" + location.host + "/listdomains/";
+  var destination = location.protocol + "//" + location.host + "/api/domains/";
   var jqxhr = $.ajax({
     type: "GET",
     url: destination,
@@ -272,7 +277,8 @@ function fill_domains() {
 function add_user() {
   var spinner = new Spinner().spin();
   document.getElementById('virtual-users').appendChild(spinner.el);
-  var destination = location.protocol + "//" + location.host + "/listusers";
+  // var destination = location.protocol + "//" + location.host + "/listusers";
+  var destination = location.protocol + "//" + location.host + "/api/users";
   var form_data = $('#add-user-form').serializeArray();
   form_map = { 'mail': form_data[0]['value'], 'password': form_data[1]['value'] }
   if (form_data[1]['value'].length < 6) {
@@ -311,7 +317,8 @@ function fill_users() {
   document.getElementById('virtual-users').appendChild(spinner.el);
   $('#get-alert-status').addClass('hidden');
   data_table.clear();
-  var destination = location.protocol + "//" + location.host + "/listusers" + "?domain=" + domainID;
+  // var destination = location.protocol + "//" + location.host + "/listusers" + "?domain=" + domainID;
+  var destination = location.protocol + "//" + location.host + "/api/users" + "?domain=" + domainID;
   var jqxhr = $.ajax({
     type: "GET",
     url: destination,

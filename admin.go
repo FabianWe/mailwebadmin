@@ -132,6 +132,14 @@ func BootstrapUsersTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/users.html"))
 }
 
+func BootstrapAliasesTemplate() *template.Template {
+	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/aliases.html"))
+}
+
+func BootstrapLicenseTemplate() *template.Template {
+	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/license.html"))
+}
+
 func RenderLoginTemplate(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	values := map[string]interface{}{
 		csrf.TemplateTag: csrf.TemplateField(r)}
@@ -144,6 +152,14 @@ func RenderDomainsTemplate(appContext *MailAppContext, w http.ResponseWriter, r 
 
 func RenderUsersTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	return appContext.Templates["users"].ExecuteTemplate(w, "layout", nil)
+}
+
+func RenderAliasesTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	return appContext.Templates["aliases"].ExecuteTemplate(w, "layout", nil)
+}
+
+func RenderLicenseTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	return appContext.Templates["license"].ExecuteTemplate(w, "layout", nil)
 }
 
 func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
@@ -254,13 +270,13 @@ func parseIDFromURL(regex *regexp.Regexp, url string) (int64, error) {
 	}
 }
 
-var listDomainsRegex = regexp.MustCompile(`^/listdomains/((\d+)/?)?$`)
+var listDomainsRegex = regexp.MustCompile(`^/api/domains/((\d+)/?)?$`)
 
 func parseListDomainURL(url string) (int64, error) {
 	return parseIDFromURL(listDomainsRegex, url)
 }
 
-var listUsersRegex = regexp.MustCompile(`^/listusers(/(\d+)/?)?$`)
+var listUsersRegex = regexp.MustCompile(`^/api/users(/(\d+)/?)?$`)
 
 func parseListUsersURL(url string) (int64, error) {
 	return parseIDFromURL(listUsersRegex, url)
@@ -348,7 +364,7 @@ func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 	switch r.Method {
 	case getMethod:
 		if domainID >= 0 {
-			http.Error(w, "Invalid GET request. Must be GET /listdomains/", 400)
+			http.Error(w, "Invalid GET request. Must be GET /api/domains/", 400)
 			return nil
 		}
 		res, err := ListVirtualDomains(appcontext)
@@ -366,18 +382,18 @@ func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 		return nil
 	case postMethod:
 		if domainID >= 0 {
-			http.Error(w, "Invalid POST request to /listdomains/.", 400)
+			http.Error(w, "Invalid POST request to /api/domains/.", 400)
 			return nil
 		}
 		return addDomain(appcontext, w, r)
 	case deleteMethod:
 		if domainID < 0 {
-			http.Error(w, "Invalid DELETE request to /listdomains/: No id given.", 400)
+			http.Error(w, "Invalid DELETE request to /api/domains/: No id given.", 400)
 			return nil
 		}
 		return deleteDomain(domainID, appcontext, w, r)
 	default:
-		http.Error(w, fmt.Sprintf("Invalid method for /listdomains/: %s", r.Method), 400)
+		http.Error(w, fmt.Sprintf("Invalid method for /api/domains/: %s", r.Method), 400)
 		return nil
 	}
 }
@@ -492,11 +508,11 @@ func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Re
 	}
 	switch r.Method {
 	default:
-		http.Error(w, fmt.Sprintf("Invalid method for /listusers/: %s", r.Method), 400)
+		http.Error(w, fmt.Sprintf("Invalid method for /api/users/: %s", r.Method), 400)
 		return nil
 	case getMethod:
 		if userID >= 0 {
-			http.Error(w, "Invalid GET request. Must be GET /listusers/", 400)
+			http.Error(w, "Invalid GET request. Must be GET /api/users/", 400)
 			return nil
 		}
 		var domainID int64 = -1
@@ -527,19 +543,19 @@ func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Re
 		return nil
 	case updateMethod:
 		if userID < 0 {
-			http.Error(w, "Invalid UPDATE request to /listusers/: No id given.", 400)
+			http.Error(w, "Invalid UPDATE request to /api/users/: No id given.", 400)
 			return nil
 		}
 		return changePassword(userID, appcontext, w, r)
 	case postMethod:
 		if userID >= 0 {
-			http.Error(w, "Invalid POST request to /listusers/.", 400)
+			http.Error(w, "Invalid POST request to /api/users/.", 400)
 			return nil
 		}
 		return addMail(appcontext, w, r)
 	case deleteMethod:
 		if userID < 0 {
-			http.Error(w, "Invalid DELETE request to /listusers/: No id given.", 400)
+			http.Error(w, "Invalid DELETE request to /api/users/: No id given.", 400)
 			return nil
 		}
 		return deleteMail(userID, appcontext, w, r)
