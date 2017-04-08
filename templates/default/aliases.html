@@ -34,16 +34,14 @@ var csrf_listaliases = null
 $(document).ready(function() {
   $("#add-alias-form").submit(function(event) {
     event.preventDefault();
-    // TODO
-    // add_alias();
+    add_alias();
   });
   data_table = $('#aliases').DataTable( {
     "columnDefs": [
         { "searchable": false, "orderable": false, "targets": 2 }
       ]
     });
-    // TODO
-    // fill_users();
+    fill_aliases();
 });
 </script>
 {{ end }}

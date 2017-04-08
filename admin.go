@@ -282,6 +282,12 @@ func parseListUsersURL(url string) (int64, error) {
 	return parseIDFromURL(listUsersRegex, url)
 }
 
+var listAliasRegx = regexp.MustCompile(`^/api/aliases/((\d+)/?)?$`)
+
+func parseListAliasesURL(url string) (int64, error) {
+	return parseIDFromURL(listAliasRegx, url)
+}
+
 func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	body, readErr := ioutil.ReadAll(r.Body)
 	if readErr != nil {
@@ -353,6 +359,10 @@ func deleteDomain(domainID int64, appcontext *MailAppContext, w http.ResponseWri
 	}
 	// try to remove the domain
 	return DeleteVirtualDomain(appcontext, domainID)
+}
+
+func deleteAlias(aliasID int64, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	return DelAlias(appContext, aliasID)
 }
 
 func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
@@ -559,5 +569,83 @@ func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Re
 			return nil
 		}
 		return deleteMail(userID, appcontext, w, r)
+	}
+}
+
+func addAlias(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	body, readErr := ioutil.ReadAll(r.Body)
+	if readErr != nil {
+		appContext.Logger.Info("Invalid request syntax to add an alias")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	var aliasData struct {
+		Source, Dest string
+	}
+	jsonErr := json.Unmarshal(body, &aliasData)
+	if jsonErr != nil {
+		appContext.Logger.Info("Invalid request syntax to add an alias")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	// add user
+	aliasID, addErr := AddAlias(appContext, aliasData.Source, aliasData.Dest)
+	if addErr != nil {
+		return addErr
+	}
+	res := make(map[string]interface{})
+	res["alias-id"] = aliasID
+	// encode to json
+	jsonEnc, jsonEncErr := json.Marshal(res)
+	if jsonEncErr != nil {
+		// just log the error, but the insertion took place, so we return nil
+		appContext.Logger.WithField("map", res).WithError(jsonEncErr).Warn("Can't enocode map to JSON")
+		return nil
+	}
+	// everything ok
+	w.Write(jsonEnc)
+	return nil
+}
+
+func ListAliasesJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	aliasID, parseErr := parseListAliasesURL(r.URL.String())
+	if parseErr != nil && parseErr != errNoID {
+		http.NotFound(w, r)
+		return nil
+	}
+	switch r.Method {
+	default:
+		http.Error(w, fmt.Sprintf("Invalid method for /api/aliases/: %s", r.Method), 400)
+		return nil
+	case getMethod:
+		if aliasID >= 0 {
+			http.Error(w, "Invalid GET request. Must be GET /api/aliases/", 400)
+			return nil
+		}
+		res, err := ListVirtualAliases(appcontext, -1)
+		if err != nil {
+			return err
+		}
+		// set csrf header
+		w.Header().Set("X-CSRF-Token", csrf.Token(r))
+		// create json encoding
+		jsonEnc, jsonErr := json.Marshal(res)
+		if jsonErr != nil {
+			return jsonErr
+		}
+		w.Write(jsonEnc)
+		return nil
+	case deleteMethod:
+		if aliasID < 0 {
+			http.Error(w, "Invalid DELETE request to /api/aliases/: No id given.", 400)
+			return nil
+		}
+		return deleteAlias(aliasID, appcontext, w, r)
+	case postMethod:
+		if aliasID >= 0 {
+			http.Error(w, "Invalid POST request to /api/aliases/.", 400)
+			return nil
+		}
+		return addAlias(appcontext, w, r)
 	}
 }

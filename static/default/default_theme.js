@@ -215,6 +215,73 @@ function change_password(user_id, password) {
   });
 }
 
+function add_alias() {
+  var spinner = new Spinner().spin();
+  document.getElementById('aliases').appendChild(spinner.el);
+  var destination = location.protocol + "//" + location.host + "/api/aliases/";
+  var form_data = $('#add-alias-form').serializeArray();
+  form_map = { 'source': form_data[0]['value'], 'dest': form_data[1]['value'] }
+  var json_data = JSON.stringify(form_map);
+  var jqxhr = $.ajax({
+    type: 'POST',
+    url: destination,
+    data: json_data,
+    headers: {
+      "X-CSRF-Token": csrf_listaliases,
+    },
+    success: function(data, status) {
+      set_alert($('#manipulate-alert-status'), 'success', 'Added new alias');
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+    set_alert($('#manipulate-alert-status'), 'error', 'Error adding alias: ' + error);
+  })
+  .always(function() {
+    spinner.stop();
+    fill_aliases();
+  });
+}
+
+function remove_alias_button(alias_id, source, dest) {
+  return $('<button type="button" class="btn btn-default"></button>')
+          .append( $('<span class="glyphicon glyphicon-remove" style="color:red"></span>') )
+          .click(function() {
+            delete_confirm('Delete Alias?',
+              'Are you sure that you want to delete the alias <b>' +
+              escapeHtml(source) + " &#x2192; " + escapeHtml(dest) +
+              '</b>?',
+              function(result) {
+                if(result) {
+                  delete_alias(alias_id);
+                }
+              }
+            )
+          });
+}
+
+function delete_alias(alias_id) {
+  var spinner = new Spinner().spin();
+  document.getElementById('aliases').appendChild(spinner.el);
+  var destination = location.protocol + "//" + location.host + "/api/aliases/" + alias_id + "/";
+  var jqxhr = $.ajax({
+    type: "DELETE",
+    url: destination,
+    headers: {
+        "X-CSRF-Token": csrf_listaliases,
+    },
+    success: function(data, status) {
+      set_alert($('#manipulate-alert-status'), 'success', 'Successfully removed alias');
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+    set_alert($('#manipulate-alert-status'), 'error', 'Error removing alias: ' + error);
+  })
+  .always(function() {
+    fill_aliases();
+    spinner.stop();
+  });
+}
+
 function change_password_button(user_mail, user_id) {
   return $('<button type="button" class="btn btn-default"></button>')
           .append( $('<span class="glyphicon glyphicon-lock" style="color:teal"></span>') )
@@ -239,7 +306,6 @@ function fill_domains() {
   document.getElementById('virtual-domains').appendChild(spinner.el);
   $('#get-alert-status').addClass('hidden');
   data_table.clear();
-  // var destination = location.protocol + "//" + location.host + "/listdomains/";
   var destination = location.protocol + "//" + location.host + "/api/domains/";
   var jqxhr = $.ajax({
     type: "GET",
@@ -365,6 +431,48 @@ function fill_users() {
     }
   }).fail(function(jqXHR, textStatus, error) {
     set_alert($('#get-alert-status'), 'error', 'Error getting user list: ' + error);
+  })
+  .always(function() {
+    data_table.draw();
+    spinner.stop();
+  });
+}
+
+function fill_aliases() {
+  var spinner = new Spinner().spin();
+  document.getElementById('aliases').appendChild(spinner.el);
+  $('#get-alert-status').addClass('hidden');
+  data_table.clear();
+  var destination = location.protocol + "//" + location.host + "/api/aliases/";
+  var jqxhr = $.ajax({
+    type: "GET",
+    url: destination,
+    data: "",
+    success: function(data, status, request) {
+      csrf_listaliases = request.getResponseHeader("X-CSRF-Token");
+      if(data) {
+        try {
+          var jsonDecoded = JSON.parse(data);
+          for(var aliasID in jsonDecoded) {
+            if(jsonDecoded.hasOwnProperty(aliasID)) {
+              var aliasContent = jsonDecoded[aliasID];
+              var source = aliasContent["Source"];
+              var dest = aliasContent["Dest"];
+              var jqueryRow = $('<tr></tr>')
+                .append( $('<td></td>').text(source) )
+                .append( $('<td></td>').text(dest) )
+                .append( $('<td class="datatable-button"></td>').html(remove_alias_button(aliasID, source, dest)) );
+              data_table.row.add(jqueryRow);
+            }
+          }
+        }
+        catch(e) {
+          set_alert($('#get-alert-status'), 'error', 'Error getting alias list: Invalid return syntax');
+        }
+      }
+    }
+  }).fail(function(jqXHR, textStatus, error) {
+    set_alert($('#get-alert-status'), 'error', 'Error getting alias list: ' + error);
   })
   .always(function() {
     data_table.draw();
