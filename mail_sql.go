@@ -112,6 +112,18 @@ func getDomainName(appContext *MailAppContext, domainID int64) (string, error) {
 	return domainName, nil
 }
 
+func getUserName(appContext *MailAppContext, userID int64) (string, string, error) {
+	query := "SELECT email FROM virtual_users WHERE id = ?"
+	row := appContext.DB.QueryRow(query, userID)
+	var email string
+	err := row.Scan(&email)
+	if err != nil {
+		return "", "", err
+	}
+	// split in parts
+	return ParseMailParts(email)
+}
+
 func AddMailUser(appContext *MailAppContext, email, plaintextPW string) (int64, error) {
 	// first validate the email address, this pretty much makes the next test
 	// useless, but ok...

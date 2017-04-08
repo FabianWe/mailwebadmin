@@ -276,7 +276,8 @@ function add_user() {
   var form_data = $('#add-user-form').serializeArray();
   form_map = { 'mail': form_data[0]['value'], 'password': form_data[1]['value'] }
   if (form_data[1]['value'].length < 6) {
-    bootbox.alert("Password must be at least six characters long")
+    bootbox.alert("Password must be at least six characters long");
+    spinner.stop();
     return
   }
   var json_data = JSON.stringify(form_map);

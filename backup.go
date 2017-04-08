@@ -58,9 +58,7 @@ func deleteDomainDir(pattern, domain string) error {
 
 func deleteUserDir(pattern, domain, user string) error {
 	path := getSourcePath(pattern, domain, user)
-	fmt.Println("DELETE", path)
-	return nil
-	// return os.RemoveAll(path)
+	return os.RemoveAll(path)
 }
 
 func zipDomainDir(backupDir, pattern, domain string) error {

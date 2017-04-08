@@ -314,7 +314,7 @@ func deleteDomain(domainID int64, appcontext *MailAppContext, w http.ResponseWri
 		// start a go routine, we don't want the user to wait
 		go func() {
 			if err != nil {
-				appcontext.Logger.WithError(err).WithField("domain-id", domainID).Error("Can't create backup of domain directory, NOT deleting directory")
+				appcontext.Logger.WithError(err).WithField("domain-id", domainID).Error("Can't create backup of domain directory, NOT deleting directory. Database lookup failed.")
 				return
 			}
 			// backupr if requested
@@ -450,9 +450,38 @@ func changePassword(userID int64, appContext *MailAppContext, w http.ResponseWri
 	return ChangeUserPassword(appContext, userID, pwData.Password)
 }
 
-func deleteMail(userid int64, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
-	// TODO
-	return nil
+func deleteMail(userID int64, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	// first: check if the delete option is set, if so create backup if required and
+	// delete
+	if appContext.Delete {
+		// lookup domain name before deletion
+		mail, domain, err := getUserName(appContext, userID)
+		// start a go routine, we don't want the user to wait
+		go func() {
+			if err != nil {
+				appContext.Logger.WithError(err).WithField("user-id", userID).Error("Can't create backup of user directory, NOT deleting directory. Database lookup failed")
+				return
+			}
+			// backupr if requested
+			if appContext.Backup != "" {
+				if backupErr := zipUserDir(appContext.Backup, appContext.MailDir, domain, mail); backupErr != nil {
+					appContext.Logger.WithError(backupErr).WithField("user-id", userID).Error("Can't create backup of user id. NOT deleting directory")
+					return
+				} else {
+					appContext.Logger.WithField("user-id", userID).Info("Created backup for user.")
+				}
+			}
+			// delete directory
+			if delErr := deleteUserDir(appContext.MailDir, domain, mail); delErr != nil {
+				appContext.Logger.WithError(delErr).WithField("user-id", userID).Error("Can't delete user directory")
+				return
+			} else {
+				appContext.Logger.WithField("user-id", userID).Info("Deleted user directory")
+			}
+		}()
+	}
+	// try to remove the domain
+	return DelMailUser(appContext, userID)
 }
 
 func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
