@@ -51,8 +51,6 @@ func main() {
 	if configErr != nil {
 		log.WithError(configErr).Fatal("Can't parse config file(s)")
 	}
-	http.Handle("/static/", mailwebadmin.StaticHandler())
-	http.Handle("/favicon.ico", http.FileServer(http.Dir("static")))
 
 	// if api only is set to false start the user interface
 	if !*apiOnlyPtr {
@@ -63,8 +61,11 @@ func main() {
 		appContext.Templates["users"] = mailwebadmin.BootstrapUsersTemplate()
 		appContext.Templates["aliases"] = mailwebadmin.BootstrapAliasesTemplate()
 		appContext.Templates["license"] = mailwebadmin.BootstrapLicenseTemplate()
+		appContext.Templates["admins"] = mailwebadmin.BootstrapAdminsTemplate()
 
 		// start the interface
+		http.Handle("/static/", mailwebadmin.StaticHandler())
+		http.Handle("/favicon.ico", http.FileServer(http.Dir("static")))
 		http.Handle("/login/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginPageHandler))
 		http.Handle("/logout/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.Logout)))
 		http.Handle("/license/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.RenderLicenseTemplate))
@@ -72,6 +73,7 @@ func main() {
 		http.Handle("/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderDomainsTemplate)))
 		http.Handle("/users", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderUsersTemplate)))
 		http.Handle("/aliases/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderAliasesTemplate)))
+		http.Handle("/admins/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderAdminsTemplate)))
 	}
 
 	http.Handle("/api/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListDomainsJSON)))
@@ -80,6 +82,7 @@ func main() {
 	// we want both /users and /users/
 	http.Handle("/api/users/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListUsersJSON)))
 	http.Handle("/api/aliases/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListAliasesJSON)))
+	http.Handle("/api/admins/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListAdminsJSON)))
 	appContext.Logger.WithField("port", appContext.Port).Info("Ready. Waiting for requests.")
 	appContext.Logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", appContext.Port),
 		csrf.Protect(appContext.Keys[len(appContext.Keys)-1], csrf.Secure(false))(context.ClearHandler(http.DefaultServeMux))))

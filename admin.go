@@ -160,6 +160,10 @@ func BootstrapAliasesTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/aliases.html"))
 }
 
+func BootstrapAdminsTemplate() *template.Template {
+	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/admins.html"))
+}
+
 func BootstrapLicenseTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/license.html"))
 }
@@ -184,6 +188,10 @@ func RenderAliasesTemplate(appContext *MailAppContext, w http.ResponseWriter, r 
 
 func RenderLicenseTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	return appContext.Templates["license"].ExecuteTemplate(w, "layout", nil)
+}
+
+func RenderAdminsTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	return appContext.Templates["admins"].ExecuteTemplate(w, "layout", nil)
 }
 
 func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {

@@ -75,6 +75,17 @@ func parseListAliasesURL(url string) (int64, error) {
 	return parseIDFromURL(listAliasRegx, url)
 }
 
+var adminsAliasRegx = regexp.MustCompile(`^/api/admins/((\w+)/?)?$`)
+
+func parseAdminListURL(url string) (string, error) {
+	res := adminsAliasRegx.FindStringSubmatch(url)
+	if res == nil {
+		return "", errors.New("No match")
+	} else {
+		return res[2], nil
+	}
+}
+
 func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	body, readErr := ioutil.ReadAll(r.Body)
 	if readErr != nil {
@@ -434,5 +445,84 @@ func ListAliasesJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 			return nil
 		}
 		return addAlias(appcontext, w, r)
+	}
+}
+
+func addAddmin(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	body, readErr := ioutil.ReadAll(r.Body)
+	if readErr != nil {
+		appContext.Logger.Info("Invalid request syntax for add admin.")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	var adminData struct {
+		Username, Password string
+	}
+	jsonErr := json.Unmarshal(body, &adminData)
+	if jsonErr != nil {
+		appContext.Logger.Info("Invalid request syntax for add admin.")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	// try to add the user
+	adminID, insertErr := appContext.UserHandler.Insert(adminData.Username, "", "", "", []byte(adminData.Password))
+	if insertErr != nil {
+		return insertErr
+	}
+	res := make(map[string]interface{})
+	res["admin-id"] = adminID
+	// encode to json
+	jsonEnc, jsonEncErr := json.Marshal(res)
+	if jsonEncErr != nil {
+		// just log the error, but the insertion took place, so we return nil
+		appContext.Logger.WithField("map", res).WithError(jsonEncErr).Warn("Can't enocode map to JSON")
+		return nil
+	}
+	appContext.Logger.WithField("admin-name", adminData.Username).Info("Added new admin user")
+	// everything ok
+	w.Write(jsonEnc)
+	return nil
+}
+
+func ListAdminsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	userName, parseErr := parseAdminListURL(r.URL.String())
+	if parseErr != nil {
+		http.NotFound(w, r)
+		return nil
+	}
+	switch r.Method {
+	default:
+		http.Error(w, fmt.Sprintf("Invalid method for /api/admins/: %s", r.Method), 400)
+		return nil
+	case getMethod:
+		if userName != "" {
+			http.Error(w, "Invalid GET request. Must be GET /api/admins/", 400)
+			return nil
+		}
+		res, err := appcontext.UserHandler.ListUsers()
+		if err != nil {
+			return err
+		}
+		// set csrf header
+		w.Header().Set("X-CSRF-Token", csrf.Token(r))
+		// create json encoding
+		jsonEnc, jsonErr := json.Marshal(res)
+		if jsonErr != nil {
+			return jsonErr
+		}
+		w.Write(jsonEnc)
+		return nil
+	case deleteMethod:
+		if userName == "" {
+			http.Error(w, "Invalid DELETE request to /api/admins/: No id given.", 400)
+			return nil
+		}
+		return appcontext.UserHandler.DeleteUser(userName)
+	case postMethod:
+		if userName != "" {
+			http.Error(w, "Invalid POST request to /api/admins/.", 400)
+			return nil
+		}
+		return nil
 	}
 }
