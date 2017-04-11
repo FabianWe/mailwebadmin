@@ -34,16 +34,14 @@ var csrf_listadmins = null
 $(document).ready(function() {
   $("#add-admin-form").submit(function(event) {
     event.preventDefault();
-    // TODO
-    // add_alias();
+    add_admin();
   });
-  // TODO
   data_table = $('#admins').DataTable( {
     "columnDefs": [
         { "searchable": false, "orderable": false, "targets": [1, 2] }
       ]
     });
-  //   fill_aliases();
+    fill_admins();
 });
 </script>
 {{ end }}
@@ -53,6 +51,8 @@ $(document).ready(function() {
 This site is used to manage all people who have access to the admin interface,
 so don't use it to create mailing accounts! People who have access to interface
 can do nearly everything with the mailing database.
+
+<p/>
 
 <div class="alert alert-danger hidden" id="get-alert-status"></div>
 <div class="alert alert-success hidden" id="manipulate-alert-status"></div>

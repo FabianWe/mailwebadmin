@@ -448,7 +448,7 @@ func ListAliasesJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 	}
 }
 
-func addAddmin(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+func addAdmin(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	body, readErr := ioutil.ReadAll(r.Body)
 	if readErr != nil {
 		appContext.Logger.Info("Invalid request syntax for add admin.")
@@ -481,6 +481,45 @@ func addAddmin(appContext *MailAppContext, w http.ResponseWriter, r *http.Reques
 	appContext.Logger.WithField("admin-name", adminData.Username).Info("Added new admin user")
 	// everything ok
 	w.Write(jsonEnc)
+	return nil
+}
+
+func changeAdminPassword(userName string, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	body, readErr := ioutil.ReadAll(r.Body)
+	if readErr != nil {
+		appContext.Logger.Info("Invalid request syntax to change admin password")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	var pwData struct {
+		Password string
+	}
+	jsonErr := json.Unmarshal(body, &pwData)
+	if jsonErr != nil {
+		appContext.Logger.Info("Invalid request syntax to change admin password")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	if pwLen := utf8.RuneCountInString(pwData.Password); pwLen < 6 {
+		appContext.Logger.Warn("Attempt to change admin password to a password of length < 6")
+		http.Error(w, "Admin password length too short", 400)
+		return nil
+	}
+	if updateErr := appContext.UserHandler.UpdatePassword(userName, []byte(pwData.Password)); updateErr != nil {
+		return updateErr
+	}
+	// delete all sessions for the user, user has to login again
+	adminID, getIDErr := appContext.UserHandler.GetUserID(userName)
+	if getIDErr != nil {
+		appContext.Logger.WithField("admin-user", userName).Error("Can't get admin id for user after changing password")
+		// don't return an error, password was changed
+		return nil
+	}
+	// now try to delete the sessions
+	if _, delSessionsErr := appContext.SessionController.DeleteEntriesForUser(adminID); delSessionsErr != nil {
+		appContext.Logger.WithField("admin-user", userName).Error("Can't delete sessions for user after changing password, user may be still logged in!")
+		return nil
+	}
 	return nil
 }
 
@@ -517,12 +556,32 @@ func ListAdminsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.R
 			http.Error(w, "Invalid DELETE request to /api/admins/: No id given.", 400)
 			return nil
 		}
-		return appcontext.UserHandler.DeleteUser(userName)
+		// firt get the id of the user, we need this later to destroy all sessions
+		adminID, getIDErr := appcontext.UserHandler.GetUserID(userName)
+		if getIDErr != nil {
+			return getIDErr
+		}
+		// delete user, if this fails reply with internal server error
+		if delErr := appcontext.UserHandler.DeleteUser(userName); delErr != nil {
+			return delErr
+		}
+		// now delete all sessions for the user
+		if _, delAllErr := appcontext.SessionController.DeleteEntriesForUser(adminID); delAllErr != nil {
+			appcontext.Logger.WithField("admin-user", userName).Error("Can't delete sessions for user, he may still be logged in even after removal!")
+			// deletion took place, so still we return nil
+		}
+		return nil
 	case postMethod:
 		if userName != "" {
 			http.Error(w, "Invalid POST request to /api/admins/.", 400)
 			return nil
 		}
-		return nil
+		return addAdmin(appcontext, w, r)
+	case updateMethod:
+		if userName == "" {
+			http.Error(w, "Invalid UPDATE request to /api/admins/.", 400)
+			return nil
+		}
+		return changeAdminPassword(userName, appcontext, w, r)
 	}
 }

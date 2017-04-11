@@ -148,7 +148,6 @@ function remove_domain_button(domain_name, domainID) {
 function delete_user(userID) {
   var spinner = new Spinner().spin();
   document.getElementById('virtual-users').appendChild(spinner.el);
-  // var destination = location.protocol + "//" + location.host + "/listusers/" + userID + "/";
   var destination = location.protocol + "//" + location.host + "/api/users/" + userID + "/";
   var jqxhr = $.ajax({
     type: "DELETE",
@@ -189,7 +188,7 @@ function remove_user_button(user_mail, user_id) {
 
 function change_password(user_id, password) {
   if (password.length < 6) {
-    bootbox.alert("Password must be at least six characters long")
+    bootbox.alert("Password must be at least six characters long");
     return
   }
   var spinner = new Spinner().spin();
@@ -473,6 +472,164 @@ function fill_aliases() {
     }
   }).fail(function(jqXHR, textStatus, error) {
     set_alert($('#get-alert-status'), 'error', 'Error getting alias list: ' + error);
+  })
+  .always(function() {
+    data_table.draw();
+    spinner.stop();
+  });
+}
+
+function add_admin() {
+  var spinner = new Spinner().spin();
+  document.getElementById('admins').appendChild(spinner.el);
+  var destination = location.protocol + "//" + location.host + "/api/admins/";
+  var form_data = $('#add-admin-form').serializeArray();
+  form_map = { 'username': form_data[0]['value'], 'password': form_data[1]['value'] }
+  if (form_data[1]['value'].length < 6) {
+    bootbox.alert("Password must be at least six characters long");
+    spinner.stop();
+    return
+  }
+  var json_data = JSON.stringify(form_map);
+  var jqxhr = $.ajax({
+    type: 'POST',
+    url: destination,
+    data: json_data,
+    headers: {
+      "X-CSRF-Token": csrf_listadmins,
+    },
+    success: function(data, status) {
+      set_alert($('#manipulate-alert-status'), 'success', 'Added new user');
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+    set_alert($('#manipulate-alert-status'), 'error', 'Error adding user: ' + error);
+  })
+  .always(function() {
+    spinner.stop();
+    fill_admins();
+  });
+}
+
+function delete_admin(admin_user) {
+  console.log("DEL");
+  var spinner = new Spinner().spin();
+  document.getElementById('admins').appendChild(spinner.el);
+  var destination = location.protocol + "//" + location.host + "/api/admins/" + admin_user + "/";
+  var jqxhr = $.ajax({
+    type: "DELETE",
+    url: destination,
+    headers: {
+        "X-CSRF-Token": csrf_listadmins,
+    },
+    success: function(data, status) {
+      set_alert($('#manipulate-alert-status'), 'success', 'Successfully removed admin user');
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+    set_alert($('#manipulate-alert-status'), 'error', 'Error removing admin user: ' + error);
+  })
+  .always(function() {
+    fill_admins();
+    spinner.stop();
+  });
+}
+
+function remove_admin_button(admin_user) {
+  return $('<button type="button" class="btn btn-default"></button>')
+          .append( $('<span class="glyphicon glyphicon-remove" style="color:red"></span>') )
+          .click(function() {
+            delete_confirm('Delete Admin?',
+              'Are you sure that you want to delete the admin user <b>' +
+              admin_user + '</b>?',
+              function(result) {
+                if(result) {
+                  delete_admin(admin_user);
+                }
+              }
+            )
+          });
+}
+
+function change_admin_password(admin_user, password) {
+  if (password.length < 6) {
+    bootbox.alert("Password must be at least six characters long");
+    return
+  }
+  var spinner = new Spinner().spin();
+  document.getElementById('admins').appendChild(spinner.el);
+  var destination = location.protocol + "//" + location.host + "/api/admins/" + admin_user + "/";
+  var jqxhr = $.ajax({
+    type: "UPDATE",
+    url: destination,
+    data: JSON.stringify( { "password": password } ),
+    headers: {
+        "X-CSRF-Token": csrf_listadmins,
+    },
+    success: function(data, status) {
+      set_alert($('#manipulate-alert-status'), 'success', 'Successfully changed admin password');
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+    set_alert($('#manipulate-alert-status'), 'error', 'Error changing admin password: ' + error);
+  })
+  .always(function() {
+    spinner.stop();
+  });
+}
+
+function change_admin_password_button(admin_user) {
+  return $('<button type="button" class="btn btn-default"></button>')
+          .append( $('<span class="glyphicon glyphicon-lock" style="color:teal"></span>') )
+          .click(function() {
+            bootbox.prompt({
+              title: "Change Password for admin <b>" + escapeHtml(admin_user) + "</b>",
+              inputType: 'password',
+              callback: function (result) {
+                if (result === null) {
+                  bootbox.alert("Admin password not changed");
+                }
+                else {
+                  change_admin_password(admin_user, result);
+                }
+              }
+            });
+          });
+}
+
+function fill_admins() {
+  var spinner = new Spinner().spin();
+  document.getElementById('admins').appendChild(spinner.el);
+  $('#get-alert-status').addClass('hidden');
+  data_table.clear();
+  var destination = location.protocol + "//" + location.host + "/api/admins/";
+  var jqxhr = $.ajax({
+    type: "GET",
+    url: destination,
+    data: "",
+    success: function(data, status, request) {
+      csrf_listadmins = request.getResponseHeader("X-CSRF-Token");
+      if(data) {
+        try {
+          var jsonDecoded = JSON.parse(data);
+          for(var adminID in jsonDecoded) {
+            if(jsonDecoded.hasOwnProperty(adminID)) {
+              var username = jsonDecoded[adminID];
+              var jqueryRow = $('<tr></tr>')
+                .append( $('<td></td>').text(username) )
+                .append( $('<td class="datatable-button"></td>').html( change_admin_password_button(username) ) )
+                .append( $('<td class="datatable-button"></td>').html( remove_admin_button(username) ) );
+              data_table.row.add(jqueryRow);
+            }
+          }
+        }
+        catch(e) {
+          set_alert($('#get-alert-status'), 'error', 'Error getting admin list: Invalid return syntax');
+        }
+      }
+    }
+  }).fail(function(jqXHR, textStatus, error) {
+    set_alert($('#get-alert-status'), 'error', 'Error getting admin list: ' + error);
   })
   .always(function() {
     data_table.draw();

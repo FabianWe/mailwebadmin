@@ -222,7 +222,7 @@ func ParseConfig(configDir string) (*MailAppContext, error) {
 	}
 
 	if conf.TimeSettings.sessionLifespan.Duration == time.Duration(0) {
-		sessionLifespan = time.Duration(336 * time.Hour)
+		sessionLifespan = time.Duration(168 * time.Hour)
 	} else {
 		sessionLifespan = conf.TimeSettings.sessionLifespan.Duration
 	}
