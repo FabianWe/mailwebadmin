@@ -24,53 +24,60 @@ package mailwebadmin
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html/template"
 	"io/ioutil"
 	"net/http"
-	"regexp"
 
 	"github.com/FabianWe/goauth"
 	"github.com/gorilla/csrf"
 )
 
-// Simplified, but should be ok
-var mailRegexp = regexp.MustCompile(`^([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)`)
-
-var ErrInvalidEmail = errors.New("Invalid Email address")
-
 const (
-	getMethod    = "GET"
-	postMethod   = "POST"
+	// getMethod is the constant for http GET.
+	getMethod = "GET"
+	// postMethod is the constant for http POST.
+	postMethod = "POST"
+	// deleteMethod is the constant for http DELETE.
 	deleteMethod = "DELETE"
+	// updateMethod is the constant for http UPDATE.
 	updateMethod = "UPDATE"
 )
 
-func IsValidMail(email string) error {
-	res := mailRegexp.FindStringSubmatch(email)
-	if res == nil {
-		return ErrInvalidEmail
-	} else {
-		return nil
-	}
-}
-
+// StaticHandler is a http handler that serves files in the static directory.
 func StaticHandler() http.Handler {
 	return http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
 }
 
+// AppHandleFunc is a type for functions that accept a context as well as
+// the request and response writer.
+// It can be used as a http handle func via MailAppHandler.
+// An error returned by this function should be only internal server errors.
+// All other errors should be handled inside the function and return a
+// corresponding http response.
+// If an internal server error occurs there should be no writes to the response.
+// ServeHTTP will handle internal server errors.
 type AppHandleFunc func(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error
 
+// MailAppHandler is the handler class for AppHandleFuncs.
+// It can be used as http handler via ServeHTTP.
 type MailAppHandler struct {
+	// MailAppContext is the context that stores things like global settings,
+	// the database connection etc.
 	*MailAppContext
+	// f is the function that does something with the given context.
 	f AppHandleFunc
 }
 
+// NewMailAppHandler returns a new MailAppHandler.
 func NewMailAppHandler(context *MailAppContext, f AppHandleFunc) *MailAppHandler {
 	return &MailAppHandler{MailAppContext: context, f: f}
 }
 
+// ServeHTTP implements the http handler interface.
+// If will execute the handle function and check for an error. If an error
+// is returned (this means an internal error occurred) it will reply with a
+// 500 Internal Server Error.
 func (handler *MailAppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := handler.f(handler.MailAppContext, w, r); err != nil {
 		handler.MailAppContext.Logger.Error(err)
@@ -78,6 +85,13 @@ func (handler *MailAppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// LoginRequired takes a handler function and returns a new handler function
+// that first checks if the login is correct.
+// It will return a 302 redirect to the login page if the user is not logged in.
+// It will also check if the session has a remember-me set, and if it is not set
+// update the session MaxAge to 0.
+// An error while updating the session will not be returned as an error, but
+// will be logged.
 func LoginRequired(f AppHandleFunc) AppHandleFunc {
 	return func(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 		// first check if the user is logged in
@@ -114,6 +128,8 @@ func LoginRequired(f AppHandleFunc) AppHandleFunc {
 	}
 }
 
+// Logout will set the MaxAge of the session to -1 and thus destroy the session.
+// It will also delete the session from the database.
 func Logout(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	// try to get the key
 	session, sessionErr := appcontext.SessionController.GetSession(r, appcontext.Store)
@@ -140,60 +156,88 @@ func Logout(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) 
 	return nil
 }
 
+// BootstrapLoginTemplate is the template for the login page.
 func BootstrapLoginTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/login.html"))
 }
 
+// RootBootstrapTemplate is the template for the main page (/).
 func RootBootstrapTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/home.html"))
 }
 
+// BootstrapDomainsTemplate is the template for the domains page.
 func BootstrapDomainsTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/domains.html"))
 }
 
+// BootstrapUsersTemplate is the template for the users page.
 func BootstrapUsersTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/users.html"))
 }
 
+// BootstrapAliasesTemplate is the template for the alias page.
 func BootstrapAliasesTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/aliases.html"))
 }
 
+// BootstrapAdminsTemplate is the template for the admins page.
 func BootstrapAdminsTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/admins.html"))
 }
 
+// BootstrapLicenseTemplate is the template for the license template.
 func BootstrapLicenseTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/license.html"))
 }
 
-func RenderLoginTemplate(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+// RenderLoginTemplate renders the template stored in
+// appContext.Templates["login"].
+// It adds the csrf.TemplateTag to the context of the template.
+func RenderLoginTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	values := map[string]interface{}{
 		csrf.TemplateTag: csrf.TemplateField(r)}
-	return appcontext.Templates["login"].ExecuteTemplate(w, "layout", values)
+	return appContext.Templates["login"].ExecuteTemplate(w, "layout", values)
 }
 
+// RenderDomainsTemplate renders the template appContext.Templates["domains"].
 func RenderDomainsTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	return appContext.Templates["domains"].ExecuteTemplate(w, "layout", nil)
 }
 
+// RenderUsersTemplate renders the template appContext.Templates["users"].
 func RenderUsersTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	return appContext.Templates["users"].ExecuteTemplate(w, "layout", nil)
 }
 
+// RenderAliasesTemplate renders the template appContext.Templates["aliases"].
 func RenderAliasesTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	return appContext.Templates["aliases"].ExecuteTemplate(w, "layout", nil)
 }
 
+// RenderLicenseTemplate renders the template appContext.Templates["license"].
 func RenderLicenseTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	return appContext.Templates["license"].ExecuteTemplate(w, "layout", nil)
 }
 
+// RenderAdminsTemplate renders the template appContext.Templates["admins"].
 func RenderAdminsTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	return appContext.Templates["admins"].ExecuteTemplate(w, "layout", nil)
 }
 
+// RenderRootTemplate renders the template appContext.Templates["root"].
+func RenderRootTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	return appContext.Templates["root"].ExecuteTemplate(w, "layout", nil)
+}
+
+// CheckLogin checks the login data contained in the body of the request.
+// The body must be a JSON object of the following form:
+// {"username": <username>, "password": <password>, "remember-me": bool}
+// It returns a 400 error if the syntax is wrong.
+// If the login is correct it will create an auth session for the user, set
+// the MaxAge field of the session etc.
+// If the login succeeds it will return a 302 redirect to /.
+// If the login fails it will return a 400.
 func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	body, readErr := ioutil.ReadAll(r.Body)
 	if readErr != nil {
@@ -236,8 +280,8 @@ func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reque
 		// something went wrong, report it!
 		return sessionErr
 	}
-	// save the session, set the max age to -1 if remember me is set to false
-	// also set a session value to set the MaxAge to -1 all the time
+	// save the session, set the max age to 0 if remember me is set to false
+	// also set a session value to set the MaxAge to 0 all the time
 	session.Values["remember-me"] = loginData.RememberMe
 	if !loginData.RememberMe {
 		session.Options.MaxAge = 0
@@ -250,6 +294,9 @@ func CheckLogin(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reque
 	return nil
 }
 
+// LoginPageHandler is a handler that returns the login template for GET
+// and uses CheckLogin for POST.
+// All other methods will return a 400.
 func LoginPageHandler(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	switch r.Method {
 	default:
@@ -262,10 +309,7 @@ func LoginPageHandler(appcontext *MailAppContext, w http.ResponseWriter, r *http
 	}
 }
 
-func RenderRootTemplate(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
-	return appcontext.Templates["root"].ExecuteTemplate(w, "layout", nil)
-}
-
+// RootPageHandler is a handler that returns the root page.
 func RootPageHandler(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	switch r.Method {
 	default:

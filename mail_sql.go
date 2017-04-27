@@ -20,9 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// TODO add logging everyhwere!
-
 package mailwebadmin
+
+// This file contains SQL commands.
 
 import (
 	"encoding/base64"
@@ -37,6 +37,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// GenDovecotSHA512 generates the SHA512 hash of the given password.
+// TODO: Also support SHA256, should be very easy.
 func GenDovecotSHA512(password string) (string, error) {
 	saltBytes := securecookie.GenerateRandomKey(12)
 	if saltBytes == nil {
@@ -50,6 +52,8 @@ func GenDovecotSHA512(password string) (string, error) {
 	return fmt.Sprintf("{SHA512-CRYPT}%s", sha512), nil
 }
 
+// ParseMailParts splits an email address and returns the part before the
+// @, the domain and an error if this is not possible.
 func ParseMailParts(email string) (string, string, error) {
 	components := strings.Split(email, "@")
 	if len(components) != 2 {
@@ -61,6 +65,7 @@ func ParseMailParts(email string) (string, string, error) {
 	return components[0], components[1], nil
 }
 
+// AddVirtualDomain adds the domain to the database.
 func AddVirtualDomain(appContext *MailAppContext, domain string) (int64, error) {
 	query := "INSERT INTO virtual_domains (name) VALUES (?);"
 	res, err := appContext.DB.Exec(query, domain)
@@ -75,6 +80,9 @@ func AddVirtualDomain(appContext *MailAppContext, domain string) (int64, error) 
 	return id, nil
 }
 
+// DeleteVirtualDomain deletes the domain.
+// If the domain was not found no error is returned, but the information gets
+// logged.
 func DeleteVirtualDomain(appContext *MailAppContext, domainID int64) error {
 	query := "DELETE FROM virtual_domains WHERE id = ?;"
 	res, err := appContext.DB.Exec(query, domainID)
@@ -90,6 +98,9 @@ func DeleteVirtualDomain(appContext *MailAppContext, domainID int64) error {
 	return nil
 }
 
+// getDomainID returns the id in the virtual_domains table for the given domain
+// name. It returns the id and nil if the entry was found and MaxInt64 and
+// an error != nil if the domain was not found / an error occurred.
 func getDomainID(appContext *MailAppContext, domain string) (int64, error) {
 	query := "SELECT id FROM virtual_domains WHERE name = ?;"
 	row := appContext.DB.QueryRow(query, domain)
@@ -101,6 +112,7 @@ func getDomainID(appContext *MailAppContext, domain string) (int64, error) {
 	return id, nil
 }
 
+// getDomainName is the counterpart of getDomainID.
 func getDomainName(appContext *MailAppContext, domainID int64) (string, error) {
 	query := "SELECT name FROM virtual_domains WHERE id = ?"
 	row := appContext.DB.QueryRow(query, domainID)
@@ -112,6 +124,8 @@ func getDomainName(appContext *MailAppContext, domainID int64) (string, error) {
 	return domainName, nil
 }
 
+// getUserName returns the username for a given user id.
+// It returns the username, the domain and an error != nil if an error occurred.
 func getUserName(appContext *MailAppContext, userID int64) (string, string, error) {
 	query := "SELECT email FROM virtual_users WHERE id = ?"
 	row := appContext.DB.QueryRow(query, userID)
@@ -124,10 +138,13 @@ func getUserName(appContext *MailAppContext, userID int64) (string, string, erro
 	return ParseMailParts(email)
 }
 
+// AddMailUser adds a new mail user.
+// On success it returns the insert id and nil, on failure -1 and an
+// error != nil.
 func AddMailUser(appContext *MailAppContext, email, plaintextPW string) (int64, error) {
 	// first validate the email address, this pretty much makes the next test
 	// useless, but ok...
-	if validMail := IsValidMail(email); validMail != nil {
+	if validMail := emailValid(email); validMail != nil {
 		return -1, validMail
 	}
 	// get the mail domain
@@ -158,6 +175,8 @@ func AddMailUser(appContext *MailAppContext, email, plaintextPW string) (int64, 
 	return id, nil
 }
 
+// ChangeUserPassword changes the password for the user with the given id,
+// it returns an error != nil if something went wrong.
 func ChangeUserPassword(appContext *MailAppContext, emailID int64, plaintextPW string) error {
 	// encrypt the password
 	pwHash, pwErr := GenDovecotSHA512(plaintextPW)
@@ -180,6 +199,7 @@ func ChangeUserPassword(appContext *MailAppContext, emailID int64, plaintextPW s
 	return nil
 }
 
+// DelMailUser removes the user with the given id.
 func DelMailUser(appContext *MailAppContext, emailID int64) error {
 	query := "DELETE FROM virtual_users WHERE id = ?"
 	res, err := appContext.DB.Exec(query, emailID)
@@ -189,10 +209,14 @@ func DelMailUser(appContext *MailAppContext, emailID int64) error {
 	deleteNum, _ := res.RowsAffected()
 	if deleteNum != 1 {
 		appContext.Logger.WithField("email-id", emailID).Warn("Email for delete not found")
+	} else {
+		appContext.Logger.WithField("email-id", emailID).Info("Deleted Email")
 	}
 	return nil
 }
 
+// AddAlias adds a new alias, it returns the id of the alias in the table
+// and any error that occcurred.
 func AddAlias(appContext *MailAppContext, source, destination string) (int64, error) {
 	// the source could be an catch all alias, so we don't check if it's a valid
 	// mail address but we check if it starts with @
@@ -201,7 +225,7 @@ func AddAlias(appContext *MailAppContext, source, destination string) (int64, er
 		return -1, sourceParseErr
 	}
 
-	if validMail := IsValidMail(destination); validMail != nil {
+	if validMail := emailValid(destination); validMail != nil {
 		return -1, validMail
 	}
 
@@ -220,13 +244,21 @@ func AddAlias(appContext *MailAppContext, source, destination string) (int64, er
 	query := "INSERT INTO virtual_aliases (domain_id, source, destination) VALUES(?, ?, ?);"
 	res, insertErr := appContext.DB.Exec(query, domainID, source, destination)
 	if insertErr != nil {
+		appContext.Logger.WithError(insertErr).WithFields(log.Fields{
+			"source": source,
+			"dest":   destination,
+		}).Warn("Adding alias failed")
 		return -1, insertErr
 	}
+	appContext.Logger.WithFields(log.Fields{
+		"source": source,
+		"dest":   destination,
+	}).Info("Added new alias")
 	id, _ := res.LastInsertId()
 	return id, nil
 }
 
-// destination == "": Delete all
+// DelAlias deletes the alias with the given id.
 func DelAlias(appContext *MailAppContext, aliasID int64) error {
 	query := "DELETE FROM virtual_aliases WHERE id = ?;"
 	res, err := appContext.DB.Exec(query, aliasID)
@@ -236,10 +268,14 @@ func DelAlias(appContext *MailAppContext, aliasID int64) error {
 	deleteNum, _ := res.RowsAffected()
 	if deleteNum != 1 {
 		appContext.Logger.WithField("alias-id", aliasID).Warn("alias not found in virtual_aliases")
+	} else {
+		appContext.Logger.WithField("alias-id", aliasID).Info("Deleted alias")
 	}
 	return err
 }
 
+// ListVirtualDomains returns a map containing all virtual domains in the form
+// id --> name.
 func ListVirtualDomains(appContext *MailAppContext) (map[int64]string, error) {
 	query := "SELECT id, name FROM virtual_domains;"
 	rows, err := appContext.DB.Query(query)
@@ -264,11 +300,13 @@ func ListVirtualDomains(appContext *MailAppContext) (map[int64]string, error) {
 	return res, nil
 }
 
-// domainID < 0 for all domains
-
+// VirtualUser stores information about a virtual user, the mail address
+// and the virtual domain id.
 type VirtualUser struct {
+	// DomainID is the id for the domain stored in the database.
 	DomainID int64
-	Mail     string
+	// Mail is the user Email.
+	Mail string
 }
 
 func ListVirtualUsers(appContext *MailAppContext, domainID int64) (map[int64]*VirtualUser, error) {
@@ -302,13 +340,17 @@ func ListVirtualUsers(appContext *MailAppContext, domainID int64) (map[int64]*Vi
 	return res, nil
 }
 
+// Alias stores information about a virtual alias.
 type Alias struct {
-	DomainID     int64
+	// DomainID is the domain id of the source mail.
+	DomainID int64
+	// Source and Dest are the source and destination email.
 	Source, Dest string
 }
 
-// List everything from the virtual_aliases table
-// domainID < 0: All
+// ListVirtualAliases lists all virtual aliases given an domainID.
+// If domainID is < 0 it returns all entries (for all domains).
+// The map contains entries of the form aliasID --> Alias.
 func ListVirtualAliases(appContext *MailAppContext, domainID int64) (map[int64]*Alias, error) {
 	var query string
 	queryArgs := make([]interface{}, 0)
@@ -340,21 +382,34 @@ func ListVirtualAliases(appContext *MailAppContext, domainID int64) (map[int64]*
 	return res, nil
 }
 
+// ListUserResult stores information about users. This is: All virtual users
+// and users that are only an alias for something else combined.
+// The VirtualUser is set to nil if it is only an alias and the virtual user ID.
+// Otherwise it contains the valid user information.
+// Alias for contains all aliases in the form aliasID -> Alias.
 type ListUserResult struct {
 	VirtualUser   *VirtualUser
 	VirtualUserID int64
 	AliasFor      map[int64]*Alias
 }
 
+// NewListResultForVirtualUser creates a new ListUserResult for a virtual user.
+// AliasFor gets initialized to an empty map.
 func NewListResultForVirtualUser(user *VirtualUser, virtualUserID int64) *ListUserResult {
 	return &ListUserResult{VirtualUser: user,
 		AliasFor: make(map[int64]*Alias), VirtualUserID: virtualUserID}
 }
 
+// NewListResultForVirtualAlias creates a new ListUserResult for a virtual alias.
+// It sets VirtualUser to nil, VirtualUserID to -1 and creates an empty AliasFor
+// map.
 func NewListResultForVirtualAlias() *ListUserResult {
 	return NewListResultForVirtualUser(nil, -1)
 }
 
+// ListAllUsers lists all users for a given domain.
+// The result maps the email to the ListUserResult for that mail.
+// Again a domainID < 0 means "all domains".
 func ListAllUsers(appContext *MailAppContext, domainID int64) (map[string]*ListUserResult, error) {
 	// we get the virtual users and all aliases for the domain, each in a different
 	// goroutine

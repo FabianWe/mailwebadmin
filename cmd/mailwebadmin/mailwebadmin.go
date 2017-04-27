@@ -37,8 +37,6 @@ import (
 )
 
 func main() {
-	// parse cmd options
-
 	configDirPtr := flag.String("config", "./config", "Directory to store the configuration files.")
 	apiOnlyPtr := flag.Bool("api-only", false, "If set only the API services are started, not the user interface")
 	flag.Parse()

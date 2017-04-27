@@ -22,6 +22,9 @@
 
 package mailwebadmin
 
+// This file contains functions for parsing the configuration file and initializing
+// the database.
+
 import (
 	"bufio"
 	"database/sql"
@@ -41,22 +44,58 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// MailAppContext stores all global options for all handlers.
 type MailAppContext struct {
-	DB                     *sql.DB
-	ConfigDir              string
-	Store                  sessions.Store
-	Logger                 *logrus.Logger
-	UserHandler            goauth.UserHandler
-	SessionController      *goauth.SessionController
-	Keys                   [][]byte
-	Templates              map[string]*template.Template
+	// DB is the database to work on.
+	DB *sql.DB
+	// ConfigDir is the directory containing the configuration files.
+	ConfigDir string
+	// Store is the session store to be used. It gets initialized after reading
+	// the key file.
+	Store sessions.Store
+	// Logger is used to log messages.
+	Logger *logrus.Logger
+	// UserHandler is used to administer admin users.
+	UserHandler goauth.UserHandler
+	// SessionController is used to control the admin users sessions.
+	SessionController *goauth.SessionController
+	// Keys stores the keys used for the auth sessions, see
+	// http://www.gorillatoolkit.org/pkg/sessions for more details.
+	// We assume that we always have pairs of keys: auth-key and encryption-key.
+	Keys [][]byte
+	// Templates stores all templates for rendering the pages.
+	// See the main file for all templates used.
+	Templates map[string]*template.Template
+	// DefaultSessionLifespan is the lifespan of a session for an admin user.
 	DefaultSessionLifespan time.Duration
-	Port                   int
-	MailDir                string
-	Delete                 bool
-	Backup                 string
+	// Port is the port to run on, defaults to 80.
+	Port int
+	// MailDir is the pattern that returns the path of a user / domain.
+	// It must contain the placeholders %d that gets replaced by the domain
+	// and %n that gets replaced by the user name.
+	// It defaults to "/var/vmail/%d/%n".
+	// If no username is given (i.e. we want the directory for a whole domain)
+	// %n gets replaced by the empty string, so this must return a valid path.
+	MailDir string
+	// Delete is set to true if when deleting a domain / user from the database
+	// the corresponding directories should be deleted as well.
+	Delete bool
+	// Backup is the directory where the backup files are stored.
+	// If set to the empty string no backups will be created.
+	// Otherwise backups (as zip files) are created inside this directory.
+	// It defaults to the empty string.
+	Backup string
 }
 
+// ReadOrCreateKeys either reads the key file or, if it doesn't exist, creates
+// a key pair. contenxt.Keys are set to the keys read / created.
+// If a key file (inside ConfigDir/keys) exists it must be a file with
+// a key in each line.
+// There must be pairs stored in the file: A list of
+// auth-key
+// encryption-key
+// ...
+// The auth-keys must be 64 byte long, the encryption keys 32 bytes long.
 func (context *MailAppContext) ReadOrCreateKeys() {
 	keyFile := path.Join(context.ConfigDir, "keys")
 	var res [][]byte
@@ -85,6 +124,9 @@ func (context *MailAppContext) ReadOrCreateKeys() {
 	context.Store = sessions.NewCookieStore(res...)
 }
 
+// ReadKeyPairs reads the key pairs from the key files.
+// It returns an error if there are not % 2 keys in the file or something
+// during reading goes wrong.
 func ReadKeyPairs(path string) ([][]byte, error) {
 	file, err := os.Open(path)
 	defer file.Close()
@@ -110,6 +152,8 @@ func ReadKeyPairs(path string) ([][]byte, error) {
 	return res, nil
 }
 
+// WriteKeyPairs writes the key pairs to the file specified in path.
+// All keys get base64 encoded.
 func WriteKeyPairs(path string, keyPairs ...[]byte) error {
 	if len(keyPairs)%2 != 0 {
 		return fmt.Errorf("Expected a list of keyPairs, i.e. length mod 2 == 0, got length %d", len(keyPairs))
@@ -134,6 +178,7 @@ func WriteKeyPairs(path string, keyPairs ...[]byte) error {
 	return nil
 }
 
+// GenKeyPair generates a new auth-key, encryption-key pair.
 func GenKeyPair() ([][]byte, error) {
 	err := errors.New("Can't create a random key, something wrong with your random engine? Stop now!")
 	authKey := securecookie.GenerateRandomKey(64)
@@ -147,6 +192,8 @@ func GenKeyPair() ([][]byte, error) {
 	return [][]byte{authKey, encryptionKey}, nil
 }
 
+// tomlConfig is used to parse the configuration file.
+// See wiki for configuration options.
 type tomlConfig struct {
 	Port         int
 	MailDir      string `toml:"maildir"`
@@ -156,26 +203,35 @@ type tomlConfig struct {
 	TimeSettings timeSettings `toml:"timers"`
 }
 
+// dbInfo is used in the server config in the [mysql] section.
 type dbInfo struct {
 	User, Password, DBName, Host string
 	Port                         int
 }
 
+// duration is a time that simply stores a time.Duration and can be
+// unmarshalled.
 type duration struct {
 	time.Duration
 }
 
+// UnmarshalText Unmarshal the given text and transform to a duration object.
 func (d *duration) UnmarshalText(text []byte) error {
 	var err error
 	d.Duration, err = time.ParseDuration(string(text))
 	return err
 }
 
+// timeSettings is used in the server config in the [timers] section.
 type timeSettings struct {
 	sessionLifespan duration `toml:"session-lifespan"`
 	invalidKeyTimer duration `toml:"invalid-keys"`
 }
 
+// ParseConfig parses the configuration file (called mailconf in the config dir).
+// It sets some values to a default value, connects to and initializes the
+// database.
+// It calls ReadOrCreateKeys.
 func ParseConfig(configDir string) (*MailAppContext, error) {
 	confPath := path.Join(configDir, "mailconf")
 	var conf tomlConfig

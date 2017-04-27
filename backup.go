@@ -22,6 +22,9 @@
 
 package mailwebadmin
 
+// This file contains functions for deleting the mail directory and backing it
+// up before deletion in a zip file.
+
 import (
 	"archive/zip"
 	"bufio"
@@ -32,15 +35,17 @@ import (
 	"strings"
 )
 
-func Muh(source, destination string) error {
-	return zipToFile(source, destination)
-}
-
+// getSourcePath returns the pattern formatted given the domain and user.
+// This means it returns the mail directory for that domain and user.
+// It replaces the %d and %n placeholders.
 func getSourcePath(pattern, domain, user string) string {
 	s := strings.Replace(pattern, "%d", domain, -1)
 	return strings.Replace(s, "%n", user, -1)
 }
 
+// getDestPath returns the zip file path for backing up domains / user accounts.
+// The zip file is either called <domain>.zip when backing up a whole domain
+// or <domain>-<user>.zip for user accounts.
 func getDestPath(backupDir, domain, user string) string {
 	var zipName string
 	if user == "" {
@@ -51,28 +56,52 @@ func getDestPath(backupDir, domain, user string) string {
 	return filepath.Join(backupDir, zipName)
 }
 
+// deleteDomainDir deletes the directory for the given domain.
 func deleteDomainDir(pattern, domain string) error {
+	if containsErr := containsInvalidParts(domain); containsErr != nil {
+		return containsErr
+	}
 	path := getSourcePath(pattern, domain, "")
 	return os.RemoveAll(path)
 }
 
+// deleteUserDir deletes the directory for the given user and domain.
 func deleteUserDir(pattern, domain, user string) error {
+	if containsErr := containsInvalidParts(domain); containsErr != nil {
+		return containsErr
+	}
+	if containsErr := containsInvalidParts(user); containsErr != nil {
+		return containsErr
+	}
 	path := getSourcePath(pattern, domain, user)
 	return os.RemoveAll(path)
 }
 
+// zipDomainDir zips the domain directory.
 func zipDomainDir(backupDir, pattern, domain string) error {
+	if containsErr := containsInvalidParts(domain); containsErr != nil {
+		return containsErr
+	}
 	sourcePath := getSourcePath(pattern, domain, "")
 	destPath := getDestPath(backupDir, domain, "")
 	return zipToFile(sourcePath, destPath)
 }
 
+// zipUserDir zips the user directory.
 func zipUserDir(backupDir, pattern, domain, user string) error {
+	if containsErr := containsInvalidParts(domain); containsErr != nil {
+		return containsErr
+	}
+	if containsErr := containsInvalidParts(user); containsErr != nil {
+		return containsErr
+	}
 	sourcePath := getSourcePath(pattern, domain, user)
 	destPath := getDestPath(backupDir, domain, user)
 	return zipToFile(sourcePath, destPath)
 }
 
+// writeZip recursively adds all files under sourcePath to a zip archive.
+// The zip will be written to the writer object.
 func writeZip(sourcePath string, w io.Writer) error {
 	info, err := os.Stat(sourcePath)
 	if err != nil {
@@ -129,7 +158,16 @@ func writeZip(sourcePath string, w io.Writer) error {
 	return closeErr
 }
 
+// zipToFile writes all files under source to the destination file.
+// It uses writeZip with a file writer.
+// If source does not exist (dovecot never wrote some mails there)
+// the file gets not created.
 func zipToFile(source, destination string) error {
+	// first check if source exists
+	if _, err := os.Stat(source); os.IsNotExist(err) {
+		// in this case return nil, no error simply no mails there yet
+		return nil
+	}
 	file, err := os.Create(destination)
 	defer file.Close()
 	if err != nil {

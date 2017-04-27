@@ -30,13 +30,24 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
-	"unicode/utf8"
 
 	"github.com/gorilla/csrf"
+	"github.com/sirupsen/logrus"
 )
 
+// This file defines methods for a REST-like API.
+
+// errNoID is an error returned if request URL does not contain an id.
+// This error will be returned by parseIDFromURL if no id (sequence of integers)
+// is provided.
 var errNoID = errors.New("No id provided")
 
+// parseIDFromURL parses the id part from the url, that is the part in the URL after
+// the prefix. For example: /api/domains/ is a valid URL, it can have an id
+// for the domain, the URL would look like this: /api/domains/123456789.
+// So it will return 123456789.
+// If no id is found it will return -1 and errNoID, if the URL does not
+// match the provided regex it will return -1 and an error != nil.
 func parseIDFromURL(regex *regexp.Regexp, url string) (int64, error) {
 	res := regex.FindStringSubmatch(url)
 	if res == nil {
@@ -57,26 +68,34 @@ func parseIDFromURL(regex *regexp.Regexp, url string) (int64, error) {
 	}
 }
 
+// listDomainsRegex is the regex for parsing the id from /api/domains.
 var listDomainsRegex = regexp.MustCompile(`^/api/domains/((\d+)/?)?$`)
 
+// parseListDomainURL parses the id from /api/domains.
 func parseListDomainURL(url string) (int64, error) {
 	return parseIDFromURL(listDomainsRegex, url)
 }
 
+// listUsersRegex is the regex for parsing the id from /api/users.
 var listUsersRegex = regexp.MustCompile(`^/api/users(/(\d+)/?)?$`)
 
+// parseListUsersURL parses the id from /api/users.
 func parseListUsersURL(url string) (int64, error) {
 	return parseIDFromURL(listUsersRegex, url)
 }
 
+// listAliasRegx is the regex for parsing the id from /api/aliases.
 var listAliasRegx = regexp.MustCompile(`^/api/aliases/((\d+)/?)?$`)
 
+// parseListAliasesURL parses the id from /api/aliases.
 func parseListAliasesURL(url string) (int64, error) {
 	return parseIDFromURL(listAliasRegx, url)
 }
 
+// adminsAliasRegx is the regex for parsing the username from /api/admins.
 var adminsAliasRegx = regexp.MustCompile(`^/api/admins/((\w+)/?)?$`)
 
+// parseAdminListURL parses the username from /api/admins.
 func parseAdminListURL(url string) (string, error) {
 	res := adminsAliasRegx.FindStringSubmatch(url)
 	if res == nil {
@@ -86,10 +105,17 @@ func parseAdminListURL(url string) (string, error) {
 	}
 }
 
-func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+// addDomain adds a new domain to the database.
+// The body of the request must be a valid JSON dictionary of the form
+// {"domain-name": <domain>}
+// It checks if the name is valid according to domainNameValid.
+// It will write the domain id of the new domain to the response as a JSON dictionary:
+// {"domain-id": <id>}.
+// On error it will return a 400.
+func addDomain(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	body, readErr := ioutil.ReadAll(r.Body)
 	if readErr != nil {
-		appcontext.Logger.Info("Invalid request syntax for add domain.")
+		appContext.Logger.WithError(readErr).Info("Invalid request syntax for add domain.")
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
@@ -98,16 +124,17 @@ func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reques
 	}
 	jsonErr := json.Unmarshal(body, &domainData)
 	if jsonErr != nil {
-		appcontext.Logger.Info("Invalid request syntax for add domain.")
+		appContext.Logger.WithError(jsonErr).Info("Invalid request syntax for add domain.")
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
-	if domainLen := utf8.RuneCountInString(domainData.DomainName); domainLen > 50 || domainLen == 0 {
-		http.Error(w, "Domain length must be not empty and <= 50 characters", 400)
+	if domainErr := domainNameValid(domainData.DomainName); domainErr != nil {
+		appContext.Logger.WithError(domainErr).WithField("domain-name", domainData.DomainName).Warn("Invalid domain name in add domain")
+		http.Error(w, domainErr.Error(), 400)
 		return nil
 	}
 	// try to add the domain, we write the result new id back to the writer
-	domainID, err := AddVirtualDomain(appcontext, domainData.DomainName)
+	domainID, err := AddVirtualDomain(appContext, domainData.DomainName)
 	if err != nil {
 		return err
 	}
@@ -117,7 +144,7 @@ func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reques
 	jsonEnc, jsonEncErr := json.Marshal(res)
 	if jsonEncErr != nil {
 		// just log the error, but the insertion took place, so we return nil
-		appcontext.Logger.WithField("map", res).WithError(jsonEncErr).Warn("Can't enocode map to JSON")
+		appContext.Logger.WithField("map", res).WithError(jsonEncErr).Warn("Can't enocode map to JSON")
 		return nil
 	}
 	// everything ok
@@ -125,44 +152,53 @@ func addDomain(appcontext *MailAppContext, w http.ResponseWriter, r *http.Reques
 	return nil
 }
 
-func deleteDomain(domainID int64, appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+// deleteDomain deletes the domain with the given id.
+// If appContext.Delete is set it will delete the domain directory and if also
+// appContext.Backup is != "" it will first create a backup.
+// However backup and deleting will run in a different goroutine (we don't wait for
+// it to finish). The result will only get logged.
+func deleteDomain(domainID int64, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	// first: check if the delete option is set, if so create backup if required and
 	// delete
-	if appcontext.Delete {
+	if appContext.Delete {
 		// lookup domain name before deletion
-		name, err := getDomainName(appcontext, domainID)
+		name, err := getDomainName(appContext, domainID)
 		// start a go routine, we don't want the user to wait
 		go func() {
 			if err != nil {
-				appcontext.Logger.WithError(err).WithField("domain-id", domainID).Error("Can't create backup of domain directory, NOT deleting directory. Database lookup failed.")
+				appContext.Logger.WithError(err).WithField("domain-id", domainID).Error("Can't create backup of domain directory, NOT deleting directory. Database lookup failed.")
 				return
 			}
 			// backupr if requested
-			if appcontext.Backup != "" {
-				if backupErr := zipDomainDir(appcontext.Backup, appcontext.MailDir, name); backupErr != nil {
-					appcontext.Logger.WithError(backupErr).WithField("domain-name", name).Error("Can't create backup of domain. NOT deleting directory")
+			if appContext.Backup != "" {
+				if backupErr := zipDomainDir(appContext.Backup, appContext.MailDir, name); backupErr != nil {
+					appContext.Logger.WithError(backupErr).WithField("domain-name", name).Error("Can't create backup of domain. NOT deleting directory")
 					return
 				} else {
-					appcontext.Logger.WithField("domain-name", name).Info("Created backup for domain")
+					appContext.Logger.WithField("domain-name", name).Info("Created backup for domain")
 				}
 			}
 			// delete directory
-			if delErr := deleteDomainDir(appcontext.MailDir, name); delErr != nil {
-				appcontext.Logger.WithError(delErr).WithField("domain-name", name).Error("Can't delete domain directory")
+			if delErr := deleteDomainDir(appContext.MailDir, name); delErr != nil {
+				appContext.Logger.WithError(delErr).WithField("domain-name", name).Error("Can't delete domain directory")
 				return
 			} else {
-				appcontext.Logger.WithField("domain-name", name).Info("Deleted domain directory.")
+				appContext.Logger.WithField("domain-name", name).Info("Deleted domain directory.")
 			}
 		}()
 	}
 	// try to remove the domain
-	return DeleteVirtualDomain(appcontext, domainID)
+	return DeleteVirtualDomain(appContext, domainID)
 }
 
+// deleteAlias will delete the alias with the given id.
 func deleteAlias(aliasID int64, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	return DelAlias(appContext, aliasID)
 }
 
+// ListDomainsJSON is the main handler for domains.
+// It either renders the template on GET, creates a new domain on POST or deletes
+// a domain on DELETE.
 func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	domainID, parseErr := parseListDomainURL(r.URL.String())
 	if parseErr != nil && parseErr != errNoID {
@@ -206,10 +242,17 @@ func ListDomainsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 	}
 }
 
+// addMail adds a new mail user. It accepts a request in the following JSON dictionary
+// format:
+// {"mail": <mail>, "password": <password>}.
+// It tests if the email is valid according to emailValid and if the password is valid
+// according to passwordValid.
+// On success it writes the following JSON to the response:
+// {"user-id": <id>}.
 func addMail(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	body, readErr := ioutil.ReadAll(r.Body)
 	if readErr != nil {
-		appContext.Logger.Info("Invalid request syntax to add a user")
+		appContext.Logger.WithError(readErr).Info("Invalid request syntax to add a user")
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
@@ -218,17 +261,18 @@ func addMail(appContext *MailAppContext, w http.ResponseWriter, r *http.Request)
 	}
 	jsonErr := json.Unmarshal(body, &userData)
 	if jsonErr != nil {
-		appContext.Logger.Info("Invalid request syntax to add a user")
+		appContext.Logger.WithError(jsonErr).Info("Invalid request syntax to add a user")
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
-	if userLen := utf8.RuneCountInString(userData.Mail); userLen == 0 || userLen > 100 {
-		appContext.Logger.WithField("mail", userData.Mail).Warn("Attempt to add a user with too long / short mail")
+	if emailErr := emailValid(userData.Mail); emailErr != nil {
+		appContext.Logger.WithError(emailErr).WithField("mail", userData.Mail).Warn("Attempt to add a user with wrong email")
+		http.Error(w, emailErr.Error(), 400)
 		return nil
 	}
-	if pwLen := utf8.RuneCountInString(userData.Password); pwLen < 6 {
-		appContext.Logger.Warn("Attempt to add a user with a too short password")
-		http.Error(w, "Password length too short", 400)
+	if pwErr := passwordValid(userData.Password); pwErr != nil {
+		appContext.Logger.WithError(pwErr).WithField("mail", userData.Mail).Warn("Attempt to add a user with invalid password")
+		http.Error(w, pwErr.Error(), 400)
 		return nil
 	}
 	// add user
@@ -250,10 +294,14 @@ func addMail(appContext *MailAppContext, w http.ResponseWriter, r *http.Request)
 	return nil
 }
 
+// changePassword changes the password for the user with the given id.
+// It accepts JSON requests of the form:
+// {"password": <password>}.
+// It replies with a 400 if something went wrong.
 func changePassword(userID int64, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	body, readErr := ioutil.ReadAll(r.Body)
 	if readErr != nil {
-		appContext.Logger.Info("Invalid request syntax to change password")
+		appContext.Logger.WithError(readErr).Info("Invalid request syntax to change password")
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
@@ -262,18 +310,24 @@ func changePassword(userID int64, appContext *MailAppContext, w http.ResponseWri
 	}
 	jsonErr := json.Unmarshal(body, &pwData)
 	if jsonErr != nil {
-		appContext.Logger.Info("Invalid request syntax to change password")
+		appContext.Logger.WithError(jsonErr).Info("Invalid request syntax to change password")
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
-	if pwLen := utf8.RuneCountInString(pwData.Password); pwLen < 6 {
-		appContext.Logger.Warn("Attempt to change password to a password of length < 6")
-		http.Error(w, "Password length too short", 400)
+	if pwErr := passwordValid(pwData.Password); pwErr != nil {
+		appContext.Logger.WithError(pwErr).WithField("user-id", userID).Warn("Attempt to change a user password to an invalid password")
+		http.Error(w, pwErr.Error(), 400)
 		return nil
 	}
 	return ChangeUserPassword(appContext, userID, pwData.Password)
 }
 
+// deleteMail deletes the mail with the given id.
+// If appContext.Delete is set it will delete the mail directory and if
+// appContext.Backup != "" it will also backup the directory to the given
+// location first.
+// Again, as in deleteDomain this happens in a different goroutine we don't
+// wait for.
 func deleteMail(userID int64, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	// first: check if the delete option is set, if so create backup if required and
 	// delete
@@ -308,6 +362,8 @@ func deleteMail(userID int64, appContext *MailAppContext, w http.ResponseWriter,
 	return DelMailUser(appContext, userID)
 }
 
+// ListUsersJSON handles the /api/users domains.
+// Works nearly as ListDomainsJSON.
 func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	userID, parseErr := parseListUsersURL(r.URL.Path)
 	if parseErr != nil && parseErr != errNoID {
@@ -370,10 +426,16 @@ func ListUsersJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Re
 	}
 }
 
+// addAlias adds a new alias. The request must be JSON in the form
+// {"source": <source-mail>, "dest": <destination-mail>}.
+// It works as the other addXXX methods that have more documentation ;).
+// It also checks if source and dest have a valid form.
+// It writes the JSON dictionary:
+// {"alias-id": <id>} if everything went ok.
 func addAlias(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	body, readErr := ioutil.ReadAll(r.Body)
 	if readErr != nil {
-		appContext.Logger.Info("Invalid request syntax to add an alias")
+		appContext.Logger.WithError(readErr).Info("Invalid request syntax to add an alias")
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
@@ -382,11 +444,27 @@ func addAlias(appContext *MailAppContext, w http.ResponseWriter, r *http.Request
 	}
 	jsonErr := json.Unmarshal(body, &aliasData)
 	if jsonErr != nil {
-		appContext.Logger.Info("Invalid request syntax to add an alias")
+		appContext.Logger.WithError(jsonErr).Info("Invalid request syntax to add an alias")
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
-	// add user
+	if sourceMailErr := emailValid(aliasData.Source); sourceMailErr != nil {
+		appContext.Logger.WithError(sourceMailErr).WithFields(logrus.Fields{
+			"source": aliasData.Source,
+			"dest":   aliasData.Dest,
+		}).Warn("Tried to add invalid alias")
+		http.Error(w, sourceMailErr.Error(), 400)
+		return nil
+	}
+	if destMailErr := emailValid(aliasData.Dest); destMailErr != nil {
+		appContext.Logger.WithError(destMailErr).WithFields(logrus.Fields{
+			"source": aliasData.Source,
+			"dest":   aliasData.Dest,
+		}).Warn("Tried to add invalid alias")
+		http.Error(w, destMailErr.Error(), 400)
+		return nil
+	}
+	// add alias
 	aliasID, addErr := AddAlias(appContext, aliasData.Source, aliasData.Dest)
 	if addErr != nil {
 		return addErr
@@ -405,6 +483,8 @@ func addAlias(appContext *MailAppContext, w http.ResponseWriter, r *http.Request
 	return nil
 }
 
+// ListAliasesJSON is the main handler for /api/aliases.
+// It works nearly as ListDomainsJSON, which has more documentation ;).
 func ListAliasesJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	aliasID, parseErr := parseListAliasesURL(r.URL.String())
 	if parseErr != nil && parseErr != errNoID {
@@ -448,10 +528,15 @@ func ListAliasesJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.
 	}
 }
 
+// addAdmin adds a new admin user.
+// See addDomain for more documentation, it does nearly the same thing.
+// Username and password are verified first.
+// It writes the new id to the response in the JSON format:
+// {"admin-id": <id>}.
 func addAdmin(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	body, readErr := ioutil.ReadAll(r.Body)
 	if readErr != nil {
-		appContext.Logger.Info("Invalid request syntax for add admin.")
+		appContext.Logger.WithError(readErr).Info("Invalid request syntax for add admin.")
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
@@ -460,8 +545,18 @@ func addAdmin(appContext *MailAppContext, w http.ResponseWriter, r *http.Request
 	}
 	jsonErr := json.Unmarshal(body, &adminData)
 	if jsonErr != nil {
-		appContext.Logger.Info("Invalid request syntax for add admin.")
+		appContext.Logger.WithError(jsonErr).Info("Invalid request syntax for add admin.")
 		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	if userNameErr := adminNameValid(adminData.Username); userNameErr != nil {
+		appContext.Logger.WithError(userNameErr).WithField("admin-name", adminData.Username).Warn("Invalid admin user name")
+		http.Error(w, userNameErr.Error(), 400)
+		return nil
+	}
+	if pwErr := passwordValid(adminData.Password); pwErr != nil {
+		appContext.Logger.WithError(pwErr).WithField("admin-name", adminData.Username).Warn("Invalid password for new admin user")
+		http.Error(w, pwErr.Error(), 400)
 		return nil
 	}
 	// try to add the user
@@ -484,10 +579,13 @@ func addAdmin(appContext *MailAppContext, w http.ResponseWriter, r *http.Request
 	return nil
 }
 
+// changeAdminPassword changes the password for the given admin user.
+// The password is validated first.
+// This method also deletes all sessions for the user.
 func changeAdminPassword(userName string, appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	body, readErr := ioutil.ReadAll(r.Body)
 	if readErr != nil {
-		appContext.Logger.Info("Invalid request syntax to change admin password")
+		appContext.Logger.WithError(readErr).Info("Invalid request syntax to change admin password")
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
@@ -496,13 +594,13 @@ func changeAdminPassword(userName string, appContext *MailAppContext, w http.Res
 	}
 	jsonErr := json.Unmarshal(body, &pwData)
 	if jsonErr != nil {
-		appContext.Logger.Info("Invalid request syntax to change admin password")
+		appContext.Logger.WithError(jsonErr).Info("Invalid request syntax to change admin password")
 		http.Error(w, "Invalid request syntax", 400)
 		return nil
 	}
-	if pwLen := utf8.RuneCountInString(pwData.Password); pwLen < 6 {
-		appContext.Logger.Warn("Attempt to change admin password to a password of length < 6")
-		http.Error(w, "Admin password length too short", 400)
+	if pwErr := passwordValid(pwData.Password); pwErr != nil {
+		appContext.Logger.WithError(pwErr).WithField("admin-name", userName).Warn("Invalid password for admin user")
+		http.Error(w, pwErr.Error(), 400)
 		return nil
 	}
 	if updateErr := appContext.UserHandler.UpdatePassword(userName, []byte(pwData.Password)); updateErr != nil {
@@ -523,6 +621,9 @@ func changeAdminPassword(userName string, appContext *MailAppContext, w http.Res
 	return nil
 }
 
+// ListAdminsJSON is the main handler for /api/admins.
+// An admin is identified by the username, not an ID.
+// On delete all sessions for the user will be deleted as well.
 func ListAdminsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	userName, parseErr := parseAdminListURL(r.URL.String())
 	if parseErr != nil {
@@ -556,7 +657,7 @@ func ListAdminsJSON(appcontext *MailAppContext, w http.ResponseWriter, r *http.R
 			http.Error(w, "Invalid DELETE request to /api/admins/: No id given.", 400)
 			return nil
 		}
-		// firt get the id of the user, we need this later to destroy all sessions
+		// first get the id of the user, we need this later to destroy all sessions
 		adminID, getIDErr := appcontext.UserHandler.GetUserID(userName)
 		if getIDErr != nil {
 			return getIDErr
