@@ -195,12 +195,14 @@ func GenKeyPair() ([][]byte, error) {
 // tomlConfig is used to parse the configuration file.
 // See wiki for configuration options.
 type tomlConfig struct {
-	Port         int
-	MailDir      string `toml:"maildir"`
-	Delete       bool
-	Backup       string
-	DB           dbInfo       `toml:"mysql"`
-	TimeSettings timeSettings `toml:"timers"`
+	Port          int
+	MailDir       string `toml:"maildir"`
+	Delete        bool
+	Backup        string
+	DB            dbInfo       `toml:"mysql"`
+	TimeSettings  timeSettings `toml:"timers"`
+	AdminUser     string       `toml:"admin_user"`
+	AdminPassword string       `toml:"admin_password"`
 }
 
 // dbInfo is used in the server config in the [mysql] section.
@@ -226,6 +228,43 @@ func (d *duration) UnmarshalText(text []byte) error {
 type timeSettings struct {
 	sessionLifespan duration `toml:"session-lifespan"`
 	invalidKeyTimer duration `toml:"invalid-keys"`
+}
+
+// createAdminIfNotExists will create an adminUser with the given password.
+// If the username is empty no error will be thrown (default option is not to
+// create an admin user).
+// Otherwise password and username are verified with adminNameValid
+// and passwordValid.
+// If an admin with this name already exists this method doesn't attempt to add
+// the user and leave the password unchanged.
+func createAdminIfNotExists(context *MailAppContext, adminUser string, pw string) error {
+	if adminUser == "" {
+		return nil
+	}
+	if nameErr := adminNameValid(adminUser); nameErr != nil {
+		return nameErr
+	}
+	if pwErr := passwordValid(pw); pwErr != nil {
+		return pwErr
+	}
+	// user and password valid, lookup the user
+	_, lookupErr := context.UserHandler.GetUserID(adminUser)
+	switch lookupErr {
+	case nil:
+		// admin already exists, do nothing
+		return nil
+	case goauth.ErrUserNotFound:
+		// lookup went well, we got no error, admin doesn't exist
+		if _, insertErr := context.UserHandler.Insert(adminUser, "", "", "", []byte(pw)); insertErr != nil {
+			return insertErr
+		}
+		// everything fine
+		context.Logger.WithField("admin-user", adminUser).Info("Inserted admin user.")
+		return nil
+	default:
+		// some other error
+		return lookupErr
+	}
 }
 
 // ParseConfig parses the configuration file (called mailconf in the config dir).
@@ -315,6 +354,11 @@ func ParseConfig(configDir string) (*MailAppContext, error) {
 
 	res.Logger.Level = logrus.InfoLevel
 	res.Logger.Formatter = &logrusFormatter
+
+	// add admin user
+	if adminErr := createAdminIfNotExists(res, conf.AdminUser, conf.AdminPassword); adminErr != nil {
+		return nil, adminErr
+	}
 
 	// start a goroutine to clear the sessions table
 	sessionController.DeleteEntriesDaemon(invalidKeyTimer, nil, true)

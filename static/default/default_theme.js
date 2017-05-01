@@ -22,6 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+// This javascript code might not be nice but it works...
+// TODO document me
 
 function post_login() {
   // first post the data
