@@ -86,8 +86,8 @@ func main() {
 	http.Handle("/api/aliases/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListAliasesJSON)))
 	http.Handle("/api/admins/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListAdminsJSON)))
 	appContext.Logger.WithField("port", appContext.Port).Info("Ready. Waiting for requests.")
-	appContext.Logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", appContext.Port),
-		csrf.Protect(appContext.Keys[len(appContext.Keys)-1], csrf.Secure(false))(context.ClearHandler(http.DefaultServeMux))))
 	// appContext.Logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", appContext.Port),
-	// 	csrf.Protect(appContext.Keys[len(appContext.Keys)-1])(context.ClearHandler(http.DefaultServeMux))))
+	// 	csrf.Protect(appContext.Keys[len(appContext.Keys)-1], csrf.Secure(false))(context.ClearHandler(http.DefaultServeMux))))
+	appContext.Logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", appContext.Port),
+		csrf.Protect(appContext.Keys[len(appContext.Keys)-1])(context.ClearHandler(http.DefaultServeMux))))
 }
