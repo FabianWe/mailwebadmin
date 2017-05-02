@@ -45,7 +45,7 @@ func main() {
 		log.WithError(configDirParseErr).Fatal("Can't parse config dir path: ", configDir)
 	}
 
-	appContext, configErr := mailwebadmin.ParseConfig(configDir)
+	appContext, configErr := mailwebadmin.ParseConfig(configDir, true)
 	if configErr != nil {
 		log.WithError(configErr).Fatal("Can't parse config file(s)")
 	}

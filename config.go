@@ -271,7 +271,9 @@ func createAdminIfNotExists(context *MailAppContext, adminUser string, pw string
 // It sets some values to a default value, connects to and initializes the
 // database.
 // It calls ReadOrCreateKeys.
-func ParseConfig(configDir string) (*MailAppContext, error) {
+// startDaemon is set to true if you want to start a daemon to delete invalid
+// keys.
+func ParseConfig(configDir string, startDaemon bool) (*MailAppContext, error) {
 	confPath := path.Join(configDir, "mailconf")
 	var conf tomlConfig
 	if _, err := toml.DecodeFile(confPath, &conf); err != nil {
@@ -360,9 +362,10 @@ func ParseConfig(configDir string) (*MailAppContext, error) {
 		return nil, adminErr
 	}
 
-	// start a goroutine to clear the sessions table
-	sessionController.DeleteEntriesDaemon(invalidKeyTimer, nil, true)
-	res.Logger.WithField("sleep-time", invalidKeyTimer).Info("Starting daemon to delete invalid keys")
-
+	if startDaemon {
+		// start a goroutine to clear the sessions table
+		sessionController.DeleteEntriesDaemon(invalidKeyTimer, nil, true)
+		res.Logger.WithField("sleep-time", invalidKeyTimer).Info("Starting daemon to delete invalid keys")
+	}
 	return res, nil
 }
