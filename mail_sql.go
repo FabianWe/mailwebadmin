@@ -29,6 +29,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -50,6 +51,22 @@ func GenDovecotSHA512(password string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("{SHA512-CRYPT}%s", sha512), nil
+}
+
+// comparePasswords checks if the pwCheck hashed with the given salt is equal
+// to the stored password string (that is the whole thing including
+// {SHA512-CRYPT}).
+// So this function can be used to check if a mail password is correct:
+// pwCheck is the password submitted somewhere by a user, salt and stored
+// and the whole result and salt part as can be computed by getPWParts.
+func comparePasswords(pwCheck, salt, stored string) (bool, error) {
+	// compute the hash with the given salt and compare to the stored string
+	sha512, err := crypt.Crypt(pwCheck, fmt.Sprintf("$6$%s$", salt))
+	if err != nil {
+		return false, err
+	}
+	comp := fmt.Sprintf("{SHA512-CRYPT}%s", sha512)
+	return comp == stored, nil
 }
 
 // ParseMailParts splits an email address and returns the part before the
@@ -136,6 +153,38 @@ func getUserName(appContext *MailAppContext, userID int64) (string, string, erro
 	}
 	// split in parts
 	return ParseMailParts(email)
+}
+
+// getUserPassword returns the password as stored in the database for the given
+// mail.
+// It also returns the id of the user.
+func getUserPassword(appContext *MailAppContext, mail string) (int64, string, error) {
+	query := "SELECT id, password FROM virtual_users WHERE email = ?"
+	row := appContext.DB.QueryRow(query, mail)
+	var pw string
+	var id int64
+	err := row.Scan(&id, &pw)
+	if err != nil {
+		return -1, "", err
+	}
+	// return the password
+	return id, pw, nil
+}
+
+// sha512Regex is a simplified regex to parse the password from the database,
+// it splits the input in the salt and computed hash.
+var sha512Regex = regexp.MustCompile(`^{SHA512-CRYPT}\$6\$([^\$]{16})\$(.*)$`)
+
+// getPWParts uses sha512Regex to split the password in salt and hash,
+// also returns an error if there is no match.
+// The first part is the whole encoding string including {SHA512-CRYPT}, then
+// follow the salt and hash.
+func getPWParts(pwString string) (string, string, string, error) {
+	res := sha512Regex.FindStringSubmatch(pwString)
+	if res == nil {
+		return "", "", "", errors.New("Password stored in database is not a valid SHA512 encrypted password.")
+	}
+	return res[0], res[1], res[2], nil
 }
 
 // AddMailUser adds a new mail user.

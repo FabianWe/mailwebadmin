@@ -29,8 +29,8 @@ function post_login() {
   // first post the data
   var destination = location.protocol + "//" + location.host + "/login/";
   var form_data = $('#login-credentials').serializeArray();
-  form_map = { 'username': form_data[1]['value'],
-    'password': form_data[2]['value'] }
+  var form_map = { 'username': form_data[1]['value'],
+    'password': form_data[2]['value'] };
   form_map['remember-me'] = (form_data.length == 4)
   var json_data = JSON.stringify(form_map);
   var jqxhr = $.ajax({
@@ -46,6 +46,38 @@ function post_login() {
   })
   .fail(function(jqXHR, textStatus, error) {
      $('#login-status').addClass('alert-danger').removeClass('alert-info').html("Authentication error, username / password wrong.");
+  });
+}
+
+function change_single_pw() {
+  var destination = location.protocol + "//" + location.host + "/password/";
+  var form_data = $('#mail-settings').serializeArray();
+  var form_map = {'mail': form_data[1]['value'], 'old_password': form_data[2]['value'],
+    'new_password': form_data[3]['value']};
+  if (form_map['new_password'].length < 6) {
+    bootbox.alert("Password must be at least six characters long");
+    return
+  }
+  var repeat = form_data[4]['value'];
+  if (form_map['new_password'] != repeat) {
+      bootbox.alert("Passwords don't match.");
+      return
+  }
+  // post the new password
+  var json_data = JSON.stringify(form_map);
+  var jqxhr = $.ajax({
+    type: 'POST',
+    url: destination,
+    data: json_data,
+    headers: {
+      "X-CSRF-Token": form_data[0]['value'],
+    },
+    success: function(data, status) {
+      bootbox.alert('Successfully changed password.');
+    }
+  })
+  .fail(function(jqXHR, textStatus, error) {
+     bootbox.alert('Update failed: ' + error);
   });
 }
 
@@ -82,7 +114,7 @@ function add_domain() {
   // var destination = location.protocol + "//" + location.host + "/listdomains/";
   var destination = location.protocol + "//" + location.host + "/api/domains/";
   var form_data = $('#add-domain-form').serializeArray();
-  form_map = { 'domain-name': form_data[0]['value'] }
+  var form_map = { 'domain-name': form_data[0]['value'] }
   var json_data = JSON.stringify(form_map);
   var jqxhr = $.ajax({
     type: 'POST',

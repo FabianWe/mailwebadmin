@@ -57,11 +57,11 @@ $(document).ready(function() {
     <form id="add-alias-form">
         <div class="form-group">
             <label for="alias-source">Source Email</label>
-            <input type="email" class="form-control" id="alias-source" name="alias-source" maxlength="100" placeholder="Source">
+            <input type="email" class="form-control" id="alias-source" name="alias-source" maxlength="100" placeholder="Source" required>
         </div>
         <div class="form-group">
             <label for="alias-dest">Destination Email</label>
-            <input type="email" class="form-control" id="alias-dest" name="alias-dest" maxlength="100" placeholder="Destination">
+            <input type="email" class="form-control" id="alias-dest" name="alias-dest" maxlength="100" placeholder="Destination" required>
         </div>
         <button type="submit" class="btn btn-primary" id="submit-button">Add Alias</button>
     </form>

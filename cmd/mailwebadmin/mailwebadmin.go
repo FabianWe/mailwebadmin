@@ -60,6 +60,7 @@ func main() {
 		appContext.Templates["aliases"] = mailwebadmin.BootstrapAliasesTemplate()
 		appContext.Templates["license"] = mailwebadmin.BootstrapLicenseTemplate()
 		appContext.Templates["admins"] = mailwebadmin.BootstrapAdminsTemplate()
+		appContext.Templates["change-pw"] = mailwebadmin.BootstrapChangePWTemplate()
 
 		// start the interface
 		http.Handle("/static/", mailwebadmin.StaticHandler())
@@ -74,6 +75,7 @@ func main() {
 		http.Handle("/users/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderUsersTemplate)))
 		http.Handle("/aliases/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderAliasesTemplate)))
 		http.Handle("/admins/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.RenderAdminsTemplate)))
+		http.Handle("/password/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.ChangeSinglePasswordHandler))
 	}
 
 	http.Handle("/api/domains/", mailwebadmin.NewMailAppHandler(appContext, mailwebadmin.LoginRequired(mailwebadmin.ListDomainsJSON)))

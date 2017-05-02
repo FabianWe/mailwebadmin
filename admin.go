@@ -31,6 +31,7 @@ import (
 
 	"github.com/FabianWe/goauth"
 	"github.com/gorilla/csrf"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -191,6 +192,11 @@ func BootstrapLicenseTemplate() *template.Template {
 	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/license.html"))
 }
 
+// BootstrapChangePWTemplate is the template for the change email password site.
+func BootstrapChangePWTemplate() *template.Template {
+	return template.Must(template.ParseFiles("templates/default/base.html", "templates/default/mailpw.html"))
+}
+
 // RenderLoginTemplate renders the template stored in
 // appContext.Templates["login"].
 // It adds the csrf.TemplateTag to the context of the template.
@@ -228,6 +234,14 @@ func RenderAdminsTemplate(appContext *MailAppContext, w http.ResponseWriter, r *
 // RenderRootTemplate renders the template appContext.Templates["root"].
 func RenderRootTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
 	return appContext.Templates["root"].ExecuteTemplate(w, "layout", nil)
+}
+
+// RenderChangePWTemplate renders the template appContext.Templates["change-pw"].
+// It adds the csrf.TemplateTag to the context of the template.
+func RenderChangePWTemplate(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	values := map[string]interface{}{
+		csrf.TemplateTag: csrf.TemplateField(r)}
+	return appContext.Templates["change-pw"].ExecuteTemplate(w, "layout", values)
 }
 
 // CheckLogin checks the login data contained in the body of the request.
@@ -306,6 +320,86 @@ func LoginPageHandler(appcontext *MailAppContext, w http.ResponseWriter, r *http
 		return RenderLoginTemplate(appcontext, w, r)
 	case postMethod:
 		return CheckLogin(appcontext, w, r)
+	}
+}
+
+// ChangeSinglePasswordHandler returns on get the template for changing
+// a single password (RenderChangePWTemplate) and on post calls
+// ChangeSinglePw to update te password.
+func ChangeSinglePasswordHandler(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	switch r.Method {
+	default:
+		http.Error(w, fmt.Sprintf("Invalid method for \"/password/\": %s", r.Method), 400)
+		return nil
+	case getMethod:
+		return RenderChangePWTemplate(appContext, w, r)
+	case postMethod:
+		return ChangeSinglePw(appContext, w, r)
+	}
+}
+
+// ChangeSinglePw reads a JSON encoded map from the body, it must have the form:
+// {'mail': <Mail>, 'old_password': <Old>, 'new_password': <New>}
+// It compares the old password with the one in the database, if this is not
+// correct or the email doesn't exist it responds with a 400.
+// If the password is correct the password gets updated.
+func ChangeSinglePw(appContext *MailAppContext, w http.ResponseWriter, r *http.Request) error {
+	body, readErr := ioutil.ReadAll(r.Body)
+	if readErr != nil {
+		appContext.Logger.Info("Invalid request syntax for login.")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	var changeData struct {
+		Mail        string
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	jsonErr := json.Unmarshal(body, &changeData)
+	if jsonErr != nil {
+		appContext.Logger.Info("Invalid request syntax for change-pw.")
+		http.Error(w, "Invalid request syntax", 400)
+		return nil
+	}
+	// verify that the new password and email
+	if emailErr := emailValid(changeData.Mail); emailErr != nil {
+		appContext.Logger.WithError(emailErr).WithField("mail", changeData.Mail).Warn("Attempt to change password for an invalid email")
+		http.Error(w, emailErr.Error(), 400)
+		return nil
+	}
+	if pwErr := passwordValid(changeData.NewPassword); pwErr != nil {
+		appContext.Logger.WithError(pwErr).WithField("mail", changeData.Mail).Warn("Attempt to change password to an invalid one.")
+		http.Error(w, pwErr.Error(), 400)
+		return nil
+	}
+	// everything seems fine, now get the entry from the database and validate the
+	// old password
+	id, storedPW, getErr := getUserPassword(appContext, changeData.Mail)
+	if getErr != nil {
+		appContext.Logger.WithError(getErr).WithField("mail", changeData.Mail).Warn("Error receiving user to change password.")
+		http.Error(w, "Provided user and password don't match", 400)
+		return nil
+	}
+	enc, salt, _, parseErr := getPWParts(storedPW)
+	if parseErr != nil {
+		return parseErr
+	}
+	equal, encErr := comparePasswords(changeData.OldPassword, salt, enc)
+	if encErr != nil {
+		return encErr
+	}
+	// check if they're equal, if yes allow the change
+	if !equal {
+		// report an error to the user
+		appContext.Logger.WithError(getErr).WithFields(logrus.Fields{
+			"mail":   changeData.Mail,
+			"remote": r.RemoteAddr,
+		}).Warn("Invalid attempt to change user password.")
+		http.Error(w, "Provided user and password don't match", 400)
+		return nil
+	} else {
+		// everything ok, update the password
+		return ChangeUserPassword(appContext, id, changeData.NewPassword)
 	}
 }
 
