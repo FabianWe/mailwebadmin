@@ -199,10 +199,10 @@ type tomlConfig struct {
 	MailDir       string `toml:"maildir"`
 	Delete        bool
 	Backup        string
-	DB            dbInfo       `toml:"mysql"`
-	TimeSettings  timeSettings `toml:"timers"`
 	AdminUser     string       `toml:"admin_user"`
 	AdminPassword string       `toml:"admin_password"`
+	DB            dbInfo       `toml:"mysql"`
+	TimeSettings  timeSettings `toml:"timers"`
 }
 
 // dbInfo is used in the server config in the [mysql] section.
@@ -226,8 +226,8 @@ func (d *duration) UnmarshalText(text []byte) error {
 
 // timeSettings is used in the server config in the [timers] section.
 type timeSettings struct {
-	sessionLifespan duration `toml:"session-lifespan"`
-	invalidKeyTimer duration `toml:"invalid-keys"`
+	SessionLifespan duration `toml:"session_lifespan"`
+	InvalidKeyTimer duration `toml:"invalid_keys"`
 }
 
 // createAdminIfNotExists will create an adminUser with the given password.
@@ -310,16 +310,16 @@ func ParseConfig(configDir string) (*MailAppContext, error) {
 
 	var invalidKeyTimer, sessionLifespan time.Duration
 
-	if conf.TimeSettings.invalidKeyTimer.Duration == time.Duration(0) {
+	if conf.TimeSettings.InvalidKeyTimer.Duration == time.Duration(0) {
 		invalidKeyTimer = time.Duration(24 * time.Hour)
 	} else {
-		invalidKeyTimer = conf.TimeSettings.invalidKeyTimer.Duration
+		invalidKeyTimer = conf.TimeSettings.InvalidKeyTimer.Duration
 	}
 
-	if conf.TimeSettings.sessionLifespan.Duration == time.Duration(0) {
+	if conf.TimeSettings.SessionLifespan.Duration == time.Duration(0) {
 		sessionLifespan = time.Duration(168 * time.Hour)
 	} else {
-		sessionLifespan = conf.TimeSettings.sessionLifespan.Duration
+		sessionLifespan = conf.TimeSettings.SessionLifespan.Duration
 	}
 
 	db, openErr := sql.Open("mysql", confDBStr)

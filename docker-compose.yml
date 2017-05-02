@@ -3,3 +3,23 @@ version: "2"
 services:
   mailadmin:
     image: fabianwe/mailwebadmin
+    volumes:
+      - /var/vmail:/var/vmail
+      - ./docker_config:/config
+      - ./backup:/backup
+    environment:
+      - DB_PASSWORD=something
+      - ADMIN_USER=admin
+      - ADMIN_PASSWORD=blabla
+    links:
+      - mariadb:mysql
+    ports:
+      - 8080:80
+
+  mariadb:
+    image: mariadb
+    volumes:
+      - ./mariadb:/var/lib/mysql
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+    environment:
+      - MYSQL_ROOT_PASSWORD=something
